@@ -34,7 +34,12 @@ if auth_status:
     with tab1:
         st.header("Individual Performance")
         student = st.selectbox("Select Student", sorted(df["Student Name"].unique()))
-        year_level_filter = st.multiselect("Year Level", sorted(df["Year Level"].dropna().unique()), default=sorted(df["Year Level"].dropna().unique()))
+        year_level_group = st.multiselect(
+    "Year Level",
+    sorted(df["Year Level"].dropna().unique()),
+    default=sorted(df["Year Level"].dropna().unique()),
+    key="group_year_level"
+)
         exam_filter = st.multiselect("Exam Type", sorted(df["Exam"].unique()), default=[e for e in df["Exam"].unique() if "Continuous" not in e])
 
         filtered_df = df[(df["Student Name"] == student) & 
