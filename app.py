@@ -6,11 +6,11 @@ import numpy as np
 
 # --- Login Credentials ---
 users = {
-    "admin": {"role": "admin", "password": "admin123"},
+    "admin": {"role": "admin", "password": "password"},
     "faculty": {"role": "faculty", "password": "faculty123"},
-    "m7968": {"role": "student", "password": "pass7968", "midn": "M-7968", "name": "MALUYO, AARON JOHN"},
-    "m8142": {"role": "student", "password": "pass8142", "midn": "M-8142", "name": "TALISIC, ABDUL NAJIR"},
-    "m7929": {"role": "student", "password": "pass7929", "midn": "M-7929", "name": "LALAS, ROMEO JR"}
+    "m-7968": {"role": "student", "password": "password", "midn": "M-7968", "name": "MALUYO, AARON JOHN"},
+    "m-8142": {"role": "student", "password": "password", "midn": "M-8142", "name": "TALISIC, ABDUL NAJIR"},
+    "m-7929": {"role": "student", "password": "password", "midn": "M-7929", "name": "LALAS, ROMEO JR"}
 }
 
 # --- Load Data ---
