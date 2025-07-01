@@ -40,6 +40,20 @@ with tab1:
                 st.rerun()
             else:
                 st.error("Incorrect username or password.")
+            # Public View (Not Logged In)
+    
+    st.title("🔐 Individual Student View - Restricted Access")
+
+        st.markdown("""
+        🚫 **Restricted Access: Individual Student Data**
+
+        This section contains sensitive student performance data and is protected under MAAP’s data privacy guidelines.
+
+        - If you are a **student**, you may request your personal login credentials by contacting the **Center for Competency Assessment (CCA)**.
+        - If you are an authorized **faculty or administrator**, please log in below using your assigned credentials.
+
+        _To see what this tab looks like, refer to the sample screenshot below._
+        """)
     else:
         user = users[st.session_state.username]
         role = user["role"]
