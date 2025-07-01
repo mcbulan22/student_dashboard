@@ -33,6 +33,18 @@ with tab1:
         # Public View (Not Logged In)
         st.title("🔐 Individual Student View - Restricted Access")
 
+        st.subheader("🔑 Login")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        if st.button("Login"):
+            if username in users and users[username]["password"] == password:
+                st.session_state.login = True
+                st.session_state.user = username
+                st.success("Login successful!")
+                st.experimental_rerun()
+            else:
+                st.error("Incorrect username or password.")
+
         st.markdown("""
         🚫 **Restricted Access: Individual Student Data**
 
@@ -46,17 +58,7 @@ with tab1:
 
         st.image("sample_individual_tab.png", caption="Sample of Individual Student View", use_container_width=True)
 
-        st.subheader("🔑 Login")
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        if st.button("Login"):
-            if username in users and users[username]["password"] == password:
-                st.session_state.login = True
-                st.session_state.user = username
-                st.success("Login successful!")
-                st.experimental_rerun()
-            else:
-                st.error("Incorrect username or password.")
+
     else:
         # Logged In View
         role = users[st.session_state.user]["role"]
