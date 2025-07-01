@@ -110,36 +110,49 @@ if auth_status:
     with tab2:
         st.subheader("Group Performance Analysis")
         program = st.selectbox("Select Program", sorted(df["Program"].unique()))
+
+        # Normalize Sponsor values
+        df["Sponsor"] = df["Sponsor"].apply(lambda x: x if x in ["IMEC", "IMMAJ"] else "OTHERS")
+
         group_df = df[df["Program"] == program]
-        avg_df = group_df.groupby(["Assessment Year", "Course Name"]).mean(numeric_only=True).reset_index()
-        st.dataframe(avg_df)
+        sponsors = group_df["Sponsor"].unique()
 
-        if not avg_df.empty:
-            avg_df["Assessment Year"] = avg_df["Assessment Year"].astype(int)
-            avg_df = avg_df.sort_values(["Course Name", "Assessment Year"])
+        for sponsor in sorted(sponsors):
+            st.markdown(f"### Sponsor: {sponsor}")
+            sponsor_df = group_df[group_df["Sponsor"] == sponsor]
 
-            # Line Chart
-            fig2, ax2 = plt.subplots(figsize=(10, 5))
-            sns.lineplot(data=avg_df, x="Assessment Year", y="Score", hue="Course Name", marker="o", ax=ax2)
-            ax2.set_title(f"Average Scores by Course - {program}", fontsize=14)
-            ax2.set_ylabel("Average Score (%)")
-            ax2.set_xlabel("Assessment Year")
-            ax2.legend(title="Course Name", bbox_to_anchor=(1.05, 1), loc='upper left')
-            ax2.set_xticks(sorted(avg_df["Assessment Year"].unique()))
-            plt.tight_layout()
-            st.pyplot(fig2)
+            avg_df = sponsor_df.groupby(["Assessment Year", "Course Name"]).mean(numeric_only=True).reset_index()
+            st.dataframe(avg_df)
 
-            # Heatmap
-            st.subheader("🔥 Heatmap of Average Scores")
-            pivoted = avg_df.pivot(index="Course Name", columns="Assessment Year", values="Score").fillna(0)
+            if not avg_df.empty:
+                avg_df["Assessment Year"] = avg_df["Assessment Year"].astype(int)
+                avg_df = avg_df.sort_values(["Course Name", "Assessment Year"])
 
-            if not pivoted.empty:
-                fig_hm, ax_hm = plt.subplots(figsize=(10, len(pivoted) * 0.5))
-                sns.heatmap(pivoted, annot=True, cmap="YlGnBu", fmt=".0f", linewidths=0.5, ax=ax_hm, cbar_kws={'label': 'Score'})
-                ax_hm.set_title(f"Heatmap - {program}", fontsize=14)
-                st.pyplot(fig_hm)
+                # Line Chart
+                fig2, ax2 = plt.subplots(figsize=(10, 5))
+                sns.lineplot(data=avg_df, x="Assessment Year", y="Score", hue="Course Name", marker="o", ax=ax2)
+                ax2.set_title(f"Average Scores by Course - {program} ({sponsor})", fontsize=14)
+                ax2.set_ylabel("Average Score (%)")
+                ax2.set_xlabel("Assessment Year")
+                ax2.legend(title="Course Name", bbox_to_anchor=(1.05, 1), loc='upper left')
+                ax2.set_xticks(sorted(avg_df["Assessment Year"].unique()))
+                plt.tight_layout()
+                st.pyplot(fig2)
+
+                # Heatmap
+                st.subheader(f"🔥 Heatmap of Average Scores - {sponsor}")
+                pivoted = avg_df.pivot(index="Course Name", columns="Assessment Year", values="Score").fillna(0)
+
+                if not pivoted.empty:
+                    fig_hm, ax_hm = plt.subplots(figsize=(10, len(pivoted) * 0.5))
+                    sns.heatmap(pivoted, annot=True, cmap="YlGnBu", fmt=".0f", linewidths=0.5, ax=ax_hm, cbar_kws={'label': 'Score'})
+                    ax_hm.set_title(f"Heatmap - {program} ({sponsor})", fontsize=14)
+                    st.pyplot(fig_hm)
+                else:
+                    st.warning(f"No data available to generate heatmap for {sponsor}.")
             else:
-                st.warning("No data available to generate heatmap for this program.")
+                st.warning(f"No data available for sponsor: {sponsor}")
+
 
 # --- AUTHENTICATION RESPONSES ---
 elif auth_status is False:
