@@ -32,7 +32,7 @@ if auth_status:
 
     df = pd.read_excel("students.xlsx")
 
-    st.title("📊 MAAP Student Performance Dashboard")
+    st.title("📊 MAAP Student Performance Dashboard - Continuous Assessment of Class 2026")
     tab1, tab2 = st.tabs(["👤 Individual View", "👥 Group View"])
 
     # === INDIVIDUAL STUDENT VIEW ===
