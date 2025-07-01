@@ -109,22 +109,34 @@ if auth_status:
     # === GROUP VIEW ===
     with tab2:
         st.subheader("Group Performance Analysis")
+
+        # Ensure Sponsor column is categorized correctly
+        if "Sponsor" in df.columns:
+            df["Sponsor"] = df["Sponsor"].apply(lambda x: x if x in ["IMEC", "IMMAJ"] else "OTHERS")
+        else:
+            st.error("❌ 'Sponsor' column is missing in the dataset.")
+            st.stop()
+
         program = st.selectbox("Select Program", sorted(df["Program"].unique()))
-
-        # Normalize Sponsor values
-        df["Sponsor"] = df["Sponsor"].apply(lambda x: x if x in ["IMEC", "IMMAJ"] else "OTHERS")
-
         group_df = df[df["Program"] == program]
-        sponsors = group_df["Sponsor"].unique()
 
-        for sponsor in sorted(sponsors):
-            st.markdown(f"### Sponsor: {sponsor}")
-            sponsor_df = group_df[group_df["Sponsor"] == sponsor]
+        if group_df.empty:
+            st.warning(f"No data available for Program: {program}")
+        else:
+            sponsors = group_df["Sponsor"].unique()
+            for sponsor in sorted(sponsors):
+                st.markdown(f"## 🧑‍✈️ Sponsor: {sponsor}")
+                sponsor_df = group_df[group_df["Sponsor"] == sponsor]
 
-            avg_df = sponsor_df.groupby(["Assessment Year", "Course Name"]).mean(numeric_only=True).reset_index()
-            st.dataframe(avg_df)
+                avg_df = sponsor_df.groupby(["Assessment Year", "Course Name"]).mean(numeric_only=True).reset_index()
 
-            if not avg_df.empty:
+                if avg_df.empty:
+                    st.info(f"No records for sponsor: {sponsor}")
+                    continue
+
+                # Show average scores
+                st.dataframe(avg_df)
+
                 avg_df["Assessment Year"] = avg_df["Assessment Year"].astype(int)
                 avg_df = avg_df.sort_values(["Course Name", "Assessment Year"])
 
@@ -149,9 +161,7 @@ if auth_status:
                     ax_hm.set_title(f"Heatmap - {program} ({sponsor})", fontsize=14)
                     st.pyplot(fig_hm)
                 else:
-                    st.warning(f"No data available to generate heatmap for {sponsor}.")
-            else:
-                st.warning(f"No data available for sponsor: {sponsor}")
+                    st.warning(f"No heatmap data for sponsor: {sponsor}")
 
 
 # --- AUTHENTICATION RESPONSES ---
