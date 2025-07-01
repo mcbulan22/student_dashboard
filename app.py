@@ -23,6 +23,8 @@ if "login" not in st.session_state:
     st.session_state.user = None
 
 # --- Tabs ---
+st.title("🔐 Student Profile Dashboard")
+
 tab1, tab2 = st.tabs(["👤 Individual View", "👥 Group View"])
 
 # ===============================
@@ -66,6 +68,7 @@ with tab1:
         if st.sidebar.button("Logout"):
             st.session_state.login = False
             st.session_state.user = None
+            st.stop()  # <- Immediately halt further code
 
         if role == "student":
             midn = users[st.session_state.user]["midn"]
