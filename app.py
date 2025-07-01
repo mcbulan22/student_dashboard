@@ -4,129 +4,126 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 
-# Sample users and credentials
+# === MANUAL LOGIN SYSTEM ===
 users = {
-    "admin": {"role": "admin", "password": "admin123"},
-    "faculty": {"role": "faculty", "password": "faculty123"},
-    "m7968": {"role": "student", "password": "pass7968", "midn": "M-7968"},
-    "m8142": {"role": "student", "password": "pass8142", "midn": "M-8142"},
-    "m7929": {"role": "student", "password": "pass7929", "midn": "M-7929"},
+    "admin": {"name": "Sir Marlon", "role": "admin", "password": "adminpass"},
+    "faculty": {"name": "Faculty User", "role": "faculty", "password": "facultypass"},
+    "m7968": {"name": "MALUYO, AARON JOHN", "role": "student", "password": "aaron123", "midn": "M-7968"},
+    "m8142": {"name": "TALISIC, ABDUL NAJIR", "role": "student", "password": "abdul123", "midn": "M-8142"},
+    "m7929": {"name": "LALAS, ROMEO JR", "role": "student", "password": "romeo123", "midn": "M-7929"}
 }
 
-# Load data from Excel file
-try:
-    sample_data = pd.read_excel("students.xlsx", sheet_name="Sheet1")
-except Exception as e:
-    st.error("Failed to load student data. Please make sure 'students.xlsx' exists and has a 'Sheet1'.")
-    st.stop()
+# === LOAD DATA ===
+df = pd.read_excel("students.xlsx")
 
-# App layout
-st.set_page_config(page_title="MAAP Student Dashboard", layout="wide")
-st.title("📊 MAAP Student Performance Dashboard")
+# === LOGIN LOGIC ===
+if "login_status" not in st.session_state:
+    st.session_state.login_status = False
+    st.session_state.username = ""
 
-tab1, tab2 = st.tabs(["👤 Individual View", "👥 Group View"])
-
-# --- INDIVIDUAL TAB ---
-with tab1:
-    st.subheader("Individual Student Analysis (Login Required)")
-
-    # Login box first
-    with st.container():
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        login_button = st.button("Login")
-
-    # Show information below login box
+if not st.session_state.login_status:
+    st.title("📚 MAAP Student Dashboard - Login Required for Tab 1")
     st.markdown("""
-        **Note:** This tab displays data for specific students only. It requires login credentials to ensure access is limited to authorized individuals.
+    This dashboard provides academic performance data of MAAP students.
 
-        If you need to see data of all or groups of students, please contact the CCA first, sign the relevant data privacy documents, and request login credentials (valid for a day or specified period).
+    **🔐 Tab 1: Individual View** requires login to protect personal student data. 
 
-        If you're a student and want to view your academic profile, please coordinate with the CCA to get a temporary login credential that expires after a given time.
+    - If you are a **student**, contact CCA to receive **temporary login credentials**.
+    - If you are faculty or admin, use your designated credentials.
 
-        **To see what this tab looks like, view the sample below:**
+    _To see what this tab looks like, view the sample below._
     """)
-    st.image("sample_individual_tab.png", use_container_width=True)
+    st.image("sample_individual_tab.png", caption="Sample of Tab 1 - Individual Student View", use_column_width=True)
 
-    # Proceed with login logic
-    if username and password:
-        user = users.get(username)
-        if user and user["password"] == password:
-            st.success(f"Welcome {username}!")
-            role = user["role"]
+    st.subheader("🔑 Login")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    login_btn = st.button("Login")
 
-            if role == "admin" or role == "faculty":
-                student_df = sample_data.copy()
-            elif role == "student":
-                student_df = sample_data[sample_data["Midn Number"] == user["midn"]]
-            else:
-                student_df = pd.DataFrame()
-
-            if not student_df.empty:
-                st.dataframe(student_df)
-
-                # Line Chart
-                fig1, ax1 = plt.subplots(figsize=(10, 5))
-                sns.lineplot(data=student_df, x="Assessment Year", y="Score", hue="Course Name", marker="o", ax=ax1)
-                ax1.set_title("Score Trend by Course")
-                ax1.set_ylabel("Score (%)")
-                ax1.set_xlabel("Assessment Year")
-                st.pyplot(fig1)
-
-                # Radar Chart
-                year = st.selectbox("Select Year for Radar Chart", sorted(student_df["Assessment Year"].unique()))
-                year_data = student_df[student_df["Assessment Year"] == year]
-
-                if not year_data.empty:
-                    courses = year_data["Course Name"].tolist()
-                    scores = year_data["Score"].tolist()
-
-                    if len(courses) >= 2:
-                        scores += scores[:1]
-                        angles = [n / float(len(courses)) * 2 * np.pi for n in range(len(courses))] + [0]
-
-                        fig2, ax2 = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
-                        ax2.plot(angles, scores, linewidth=2)
-                        ax2.fill(angles, scores, alpha=0.25)
-                        ax2.set_thetagrids(np.degrees(angles[:-1]), courses)
-                        ax2.set_title("Student Radar Profile")
-                        st.pyplot(fig2)
-                    else:
-                        st.warning("Not enough courses to plot radar chart.")
-                else:
-                    st.warning("No data for selected year.")
-            else:
-                st.warning("No data found for user.")
+    if login_btn:
+        if username in users and users[username]["password"] == password:
+            st.session_state.login_status = True
+            st.session_state.username = username
+            st.success("Login successful!")
+            st.rerun()
         else:
             st.error("Incorrect username or password.")
 
-# --- GROUP TAB ---
-with tab2:
-    st.subheader("Group Performance Analysis")
+else:
+    user_info = users[st.session_state.username]
+    role = user_info["role"]
+    st.sidebar.title(f"Welcome, {user_info['name']}")
+    if st.sidebar.button("Logout"):
+        st.session_state.login_status = False
+        st.session_state.username = ""
+        st.rerun()
 
-    programs = st.multiselect("Select Program(s)", sorted(sample_data["Program"].unique()), default=sorted(sample_data["Program"].unique()))
-    sponsors = st.multiselect("Select Sponsor(s)", sorted(sample_data["Sponsor"].unique()), default=sorted(sample_data["Sponsor"].unique()))
+    # === TABS ===
+    tab1, tab2 = st.tabs(["👤 Individual View", "👥 Group View"])
 
-    filtered_df = sample_data[(sample_data["Program"].isin(programs)) & (sample_data["Sponsor"].isin(sponsors))]
+    # === TAB 1: INDIVIDUAL VIEW ===
+    with tab1:
+        if role == "student":
+            student_df = df[df["Midn Number"] == user_info["midn"]]
+            st.subheader(f"📈 Academic Profile: {user_info['name']}")
+        elif role in ["admin", "faculty"]:
+            st.subheader("Select a Student to View")
+            selected_student = st.selectbox("Student Name", sorted(df["Student Name"].unique()))
+            student_df = df[df["Student Name"] == selected_student]
+        else:
+            st.warning("Unauthorized access.")
+            st.stop()
 
-    if not filtered_df.empty:
-        avg_df = filtered_df.groupby(["Assessment Year", "Course Name"], as_index=False).mean(numeric_only=True)
-        st.dataframe(avg_df)
+        st.dataframe(student_df)
 
-        # Line Chart
-        fig3, ax3 = plt.subplots(figsize=(10, 5))
-        sns.lineplot(data=avg_df, x="Assessment Year", y="Score", hue="Course Name", marker="o", ax=ax3)
-        ax3.set_title("Average Scores by Course")
-        ax3.set_ylabel("Average Score (%)")
-        ax3.set_xlabel("Assessment Year")
-        st.pyplot(fig3)
+        if not student_df.empty:
+            student_df["Assessment Year"] = student_df["Assessment Year"].astype(int)
+            student_df = student_df.sort_values(["Course Name", "Assessment Year"])
 
-        # Heatmap
-        st.subheader("Heatmap of Average Scores")
-        heatmap_data = avg_df.pivot(index="Course Name", columns="Assessment Year", values="Score").fillna(0)
-        fig4, ax4 = plt.subplots(figsize=(10, len(heatmap_data) * 0.5))
-        sns.heatmap(heatmap_data, annot=True, cmap="YlGnBu", fmt=".0f", linewidths=0.5, ax=ax4, cbar_kws={'label': 'Score'})
-        ax4.set_title("Score Heatmap")
-        st.pyplot(fig4)
-    else:
-        st.warning("No data for selected filters.")
+            fig1, ax1 = plt.subplots(figsize=(10, 5))
+            sns.lineplot(data=student_df, x="Assessment Year", y="Score", hue="Course Name", marker="o", ax=ax1)
+            ax1.set_title("Score Trend by Course", fontsize=14)
+            ax1.set_ylabel("Score (%)")
+            ax1.set_xlabel("Assessment Year")
+            ax1.legend(title="Course Name", bbox_to_anchor=(1.05, 1), loc='upper left')
+            ax1.set_xticks(sorted(student_df["Assessment Year"].unique()))
+            plt.tight_layout()
+            st.pyplot(fig1)
+
+    # === TAB 2: GROUP VIEW ===
+    with tab2:
+        st.subheader("📊 Group Performance Analysis")
+
+        programs = st.multiselect("Select Program(s)", options=df["Program"].unique(), default=list(df["Program"].unique()))
+        sponsors = st.multiselect("Select Sponsor(s)", options=df["Sponsor"].unique(), default=list(df["Sponsor"].unique()))
+
+        filtered_df = df[df["Program"].isin(programs) & df["Sponsor"].isin(sponsors)]
+
+        st.dataframe(filtered_df)
+
+        if not filtered_df.empty:
+            avg_df = filtered_df.groupby(["Assessment Year", "Course Name"]).mean(numeric_only=True).reset_index()
+            avg_df["Assessment Year"] = avg_df["Assessment Year"].astype(int)
+
+            fig2, ax2 = plt.subplots(figsize=(10, 5))
+            sns.lineplot(data=avg_df, x="Assessment Year", y="Score", hue="Course Name", marker="o", ax=ax2)
+            ax2.set_title("Average Scores by Course", fontsize=14)
+            ax2.set_ylabel("Average Score (%)")
+            ax2.set_xlabel("Assessment Year")
+            ax2.legend(title="Course Name", bbox_to_anchor=(1.05, 1), loc='upper left')
+            ax2.set_xticks(sorted(avg_df["Assessment Year"].unique()))
+            plt.tight_layout()
+            st.pyplot(fig2)
+
+            st.subheader("🔥 Heatmap of Average Scores")
+            pivoted = avg_df.pivot(index="Course Name", columns="Assessment Year", values="Score").fillna(0)
+
+            if not pivoted.empty:
+                fig_hm, ax_hm = plt.subplots(figsize=(10, len(pivoted) * 0.5))
+                sns.heatmap(pivoted, annot=True, cmap="YlGnBu", fmt=".0f", linewidths=0.5, ax=ax_hm, cbar_kws={'label': 'Score'})
+                ax_hm.set_title("Heatmap of Scores", fontsize=14)
+                st.pyplot(fig_hm)
+            else:
+                st.warning("No data available to generate heatmap.")
+        else:
+            st.warning("No data matching the selected filters.")
