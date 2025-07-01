@@ -34,15 +34,14 @@ with tab1:
         st.title("🔐 Individual Student View - Restricted Access")
 
         st.subheader("🔑 Login")
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        login_btn = st.button("Login")  # <-- Moved this line up
+        username = st.text_input("Username", key="login_username")
+        password = st.text_input("Password", type="password", key="login_password")
+        login_btn = st.button("Login")
+
         if login_btn:
             if username in users and users[username]["password"] == password:
-                st.session_state.login_status = True
-                st.session_state.username = username
-                st.experimental_rerun()
-                st.stop()  # Prevent further code execution after rerun
+                st.session_state.login = True
+                st.session_state.user = username
             else:
                 st.error("Incorrect username or password.")
 
@@ -56,7 +55,6 @@ with tab1:
 
         _To see what this tab looks like, refer to the sample screenshot below._
         """)
-
         st.image("sample_individual_tab.png", caption="Sample of Individual Student View", use_container_width=True)
 
 
