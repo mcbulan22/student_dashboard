@@ -36,6 +36,7 @@ with tab1:
         st.subheader("🔑 Login")
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
+        login_btn = st.button("Login")  # <-- Moved this line up
         if login_btn:
             if username in users and users[username]["password"] == password:
                 st.session_state.login_status = True
