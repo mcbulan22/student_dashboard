@@ -1,15 +1,11 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import streamlit_authenticator as stauth
-import yaml
 import matplotlib.pyplot as plt
 import seaborn as sns
-from yaml.loader import SafeLoader
+import numpy as np
 
-st.set_page_config(layout="wide")
-
-# Authentication
+# --- AUTHENTICATION ---
 credentials = {
     "usernames": {
         "Admin": {
@@ -30,125 +26,123 @@ authenticator = stauth.Authenticate(
 name, auth_status, username = authenticator.login("Login", "main")
 
 if auth_status:
-    # Sidebar
     st.sidebar.image("maap_logo.png", width=120)
     st.sidebar.title(f"Welcome, {name}")
     authenticator.logout("Logout", "sidebar")
 
-    # Load Excel once
-    @st.cache_data
-    def load_data():
-        return pd.read_excel("students.xlsx")
-
-    df = load_data()
+    df = pd.read_excel("students.xlsx")
 
     st.title("📊 MAAP Student Performance Dashboard")
-
     tab1, tab2 = st.tabs(["👤 Individual View", "👥 Group View"])
 
-    # =========================
-    # 👤 INDIVIDUAL VIEW TAB
-    # =========================
+    # === INDIVIDUAL STUDENT VIEW ===
     with tab1:
-        st.header("Student Profile and Exam Results")
-
-        student_list = sorted(df["Student Name"].dropna().unique())
-        selected_student = st.selectbox("Select a Student", student_list)
-
-        exam_options = sorted(df["Exam"].dropna().unique())
-        exam_filter = st.multiselect("Select Exam Types", exam_options, default=[e for e in exam_options if e != "Continuous Assessment"], key="student_exam")
-
-        year_levels = sorted(df["Year Level"].dropna().unique())
-        year_level_filter = st.multiselect("Select Year Level", year_levels, default=year_levels, key="student_year_level")
-
-        student_df = df[
-            (df["Student Name"] == selected_student) &
-            (df["Exam"].isin(exam_filter)) &
-            (df["Year Level"].isin(year_level_filter))
-        ]
-
-        st.subheader("📋 Exam Records")
+        st.subheader("Individual Student Analysis")
+        student = st.selectbox("Select a student", sorted(df["Student Name"].unique()))
+        student_df = df[df["Student Name"] == student]
         st.dataframe(student_df)
 
         if not student_df.empty:
+            student_df["Assessment Year"] = student_df["Assessment Year"].astype(int)
+            student_df = student_df.sort_values(["Course Name", "Assessment Year"])
+
+            # Line Chart
             fig1, ax1 = plt.subplots(figsize=(10, 5))
-            sns.barplot(data=student_df, x="Course", y="Score", hue="Exam", ax=ax1)
-            ax1.set_title(f"{selected_student}'s Exam Scores by Course")
-            ax1.set_xticklabels(ax1.get_xticklabels(), rotation=45, ha="right")
-            ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            sns.lineplot(data=student_df, x="Assessment Year", y="Score", hue="Course Name", marker="o", ax=ax1)
+            ax1.set_title(f"Score Trend by Course: {student}", fontsize=14)
+            ax1.set_ylabel("Score (%)")
+            ax1.set_xlabel("Assessment Year")
+            ax1.legend(title="Course Name", bbox_to_anchor=(1.05, 1), loc='upper left')
+            ax1.set_xticks(sorted(student_df["Assessment Year"].unique()))
+            plt.tight_layout()
             st.pyplot(fig1)
 
-        # 📈 Continuous Assessment Line Graph
-        ca_df = df[(df["Student Name"] == selected_student) & (df["Exam"] == "Continuous Assessment")]
-        if not ca_df.empty:
-            st.subheader("📈 Continuous Assessment Trend")
-            fig2, ax2 = plt.subplots()
-            sns.lineplot(data=ca_df, x="Academic Year", y="Score", hue="Course", marker="o", ax=ax2)
-            ax2.set_title("Continuous Assessment per Course")
-            ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            # Radar Chart: Student vs Class Avg
+            st.subheader("🕸️ Student vs Class Average Profile (Radar)")
+            year = st.selectbox("Select Year", sorted(student_df["Assessment Year"].unique()))
+            year_student = student_df[student_df["Assessment Year"] == year]
+
+            if not year_student.empty:
+                program_name = year_student["Program"].iloc[0]
+                year_program = df[(df["Assessment Year"] == year) & (df["Program"] == program_name)]
+
+                # Build clean dataset of shared courses
+                shared_courses = year_student["Course Name"].unique()
+                student_scores = year_student.set_index("Course Name").reindex(shared_courses)["Score"]
+                class_avg_scores = year_program.groupby("Course Name")["Score"].mean().reindex(shared_courses)
+
+                # Drop any courses with NaN (missing from either)
+                combined = pd.DataFrame({
+                    "Student": student_scores,
+                    "ClassAvg": class_avg_scores
+                }).dropna()
+
+                if not combined.empty:
+                    categories = combined.index.tolist()
+                    N = len(categories)
+
+                    # Scores
+                    values_student = combined["Student"].tolist()
+                    values_class = combined["ClassAvg"].tolist()
+
+                    # Close the loop
+                    values_student += values_student[:1]
+                    values_class += values_class[:1]
+
+                    # Angles
+                    angles = [n / float(N) * 2 * np.pi for n in range(N)]
+                    angles += angles[:1]
+
+                    # Plot radar
+                    fig_radar, ax_radar = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+                    ax_radar.plot(angles, values_student, linewidth=2, label="Student")
+                    ax_radar.fill(angles, values_student, alpha=0.25)
+                    ax_radar.plot(angles, values_class, linewidth=2, linestyle='dashed', label="Class Avg")
+                    ax_radar.set_thetagrids(np.degrees(angles[:-1]), categories)
+                    ax_radar.set_title(f"{student}'s Score Profile - {year}", y=1.1)
+                    ax_radar.set_ylim(0, 100)
+                    ax_radar.legend(loc='upper right', bbox_to_anchor=(1.1, 1.1))
+                    st.pyplot(fig_radar)
+                else:
+                    st.warning("No comparable data between student and group for that year.")
+
+    # === GROUP VIEW ===
+    with tab2:
+        st.subheader("Group Performance Analysis")
+        program = st.selectbox("Select Program", sorted(df["Program"].unique()))
+        group_df = df[df["Program"] == program]
+        avg_df = group_df.groupby(["Assessment Year", "Course Name"]).mean(numeric_only=True).reset_index()
+        st.dataframe(avg_df)
+
+        if not avg_df.empty:
+            avg_df["Assessment Year"] = avg_df["Assessment Year"].astype(int)
+            avg_df = avg_df.sort_values(["Course Name", "Assessment Year"])
+
+            # Line Chart
+            fig2, ax2 = plt.subplots(figsize=(10, 5))
+            sns.lineplot(data=avg_df, x="Assessment Year", y="Score", hue="Course Name", marker="o", ax=ax2)
+            ax2.set_title(f"Average Scores by Course - {program}", fontsize=14)
+            ax2.set_ylabel("Average Score (%)")
+            ax2.set_xlabel("Assessment Year")
+            ax2.legend(title="Course Name", bbox_to_anchor=(1.05, 1), loc='upper left')
+            ax2.set_xticks(sorted(avg_df["Assessment Year"].unique()))
+            plt.tight_layout()
             st.pyplot(fig2)
 
-    # =========================
-    # 👥 GROUP VIEW TAB
-    # =========================
-    with tab2:
-        st.header("Group Performance Dashboard")
+            # Heatmap
+            st.subheader("🔥 Heatmap of Average Scores")
+            pivoted = avg_df.pivot(index="Course Name", columns="Assessment Year", values="Score").fillna(0)
 
-        programs = sorted(df["Program"].dropna().unique())
-        program_filter = st.selectbox("Select Program", programs, key="group_program")
+            if not pivoted.empty:
+                fig_hm, ax_hm = plt.subplots(figsize=(10, len(pivoted) * 0.5))
+                sns.heatmap(pivoted, annot=True, cmap="YlGnBu", fmt=".0f", linewidths=0.5, ax=ax_hm, cbar_kws={'label': 'Score'})
+                ax_hm.set_title(f"Heatmap - {program}", fontsize=14)
+                st.pyplot(fig_hm)
+            else:
+                st.warning("No data available to generate heatmap for this program.")
 
-        class_list = sorted(df["Class"].dropna().unique())
-        class_filter = st.selectbox("Select Class", ["All"] + class_list, key="group_class")
-
-        exam_group = st.multiselect("Exam Types", exam_options, default=[e for e in exam_options if e != "Continuous Assessment"], key="group_exam")
-
-        year_level_group = st.multiselect("Year Level", year_levels, default=year_levels, key="group_year_level")
-
-        group_df = df[
-            (df["Program"] == program_filter) &
-            (df["Year Level"].isin(year_level_group)) &
-            (df["Exam"].isin(exam_group))
-        ]
-
-        if class_filter != "All":
-            group_df = group_df[group_df["Class"] == class_filter]
-
-        st.subheader("📋 Group Scores")
-        st.dataframe(group_df)
-
-        if not group_df.empty:
-            avg_df = group_df.groupby(["Course", "Exam"]).mean(numeric_only=True).reset_index()
-            fig3, ax3 = plt.subplots(figsize=(10, 5))
-            sns.barplot(data=avg_df, x="Course", y="Score", hue="Exam", ax=ax3)
-            ax3.set_title(f"{program_filter} Group Average Scores by Course")
-            ax3.set_xticklabels(ax3.get_xticklabels(), rotation=45, ha="right")
-            ax3.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-            st.pyplot(fig3)
-
-        # 📈 Continuous Assessment Line Graph
-        group_ca_df = df[
-            (df["Program"] == program_filter) &
-            (df["Exam"] == "Continuous Assessment")
-        ]
-
-        if not group_ca_df.empty:
-            st.subheader("📈 Continuous Assessment - Line Chart")
-            avg_ca = group_ca_df.groupby(["Academic Year", "Course"]).mean(numeric_only=True).reset_index()
-
-            fig4, ax4 = plt.subplots(figsize=(10, 5))
-            sns.lineplot(data=avg_ca, x="Academic Year", y="Score", hue="Course", marker="o", ax=ax4)
-            ax4.set_title("Average Continuous Assessment Over Time")
-            ax4.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-            st.pyplot(fig4)
-
-            # 📊 Heatmap
-            st.subheader("🔍 Continuous Assessment - Heatmap")
-            pivot = avg_ca.pivot_table(index="Course", columns="Academic Year", values="Score", aggfunc='mean').fillna(0)
-
-            fig5, ax5 = plt.subplots(figsize=(10, 6))
-            sns.heatmap(pivot, annot=True, fmt=".0f", cmap="coolwarm", ax=ax5)
-            ax5.set_title("Course Performance Heatmap")
-            st.pyplot(fig5)
-
-else:
+# --- AUTHENTICATION RESPONSES ---
+elif auth_status is False:
+    st.error("Incorrect username or password.")
+elif auth_status is None:
     st.warning("Please enter your credentials.")
