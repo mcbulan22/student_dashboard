@@ -35,10 +35,11 @@ if not st.session_state.login_status:
             if username in users and users[username]["password"] == password:
                 st.session_state.login_status = True
                 st.session_state.username = username
-                st.success("Login successful!")
-                st.experimental_rerun()
+                st.experimental_set_query_params(logged_in="1")
+                st.stop()  # Safe halt; streamlit will rerun automatically
             else:
                 st.error("Incorrect username or password.")
+
 
         st.image("sample_individual_tab.png", caption="Sample of Tab 1 - Individual Student View", use_container_width=True)
         st.markdown("""
