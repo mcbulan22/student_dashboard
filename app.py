@@ -23,7 +23,7 @@ if "login" not in st.session_state:
     st.session_state.user = None
 
 # --- Tabs ---
-st.title("🔐 Student Profile Dashboard")
+st.title("CCA Assessment Results & Progress Dashboard")
 
 tab1, tab2 = st.tabs(["👤 Individual View", "👥 Group View"])
 
