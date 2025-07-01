@@ -4,20 +4,20 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 
-# --- Login Credentials ---
+# --- User Credentials ---
 users = {
     "admin": {"role": "admin", "password": "password"},
     "faculty": {"role": "faculty", "password": "faculty123"},
     "m-7968": {"role": "student", "password": "password", "midn": "M-7968", "name": "MALUYO, AARON JOHN"},
     "m-8142": {"role": "student", "password": "password", "midn": "M-8142", "name": "TALISIC, ABDUL NAJIR"},
-    "m-7929": {"role": "student", "password": "password", "midn": "M-7929", "name": "LALAS, ROMEO JR"}
+    "m-7929": {"role": "student", "password": "password", "midn": "M-7929", "name": "LALAS, ROMEO JR"},
 }
 
 # --- Load Data ---
 df = pd.read_excel("students.xlsx")
 df["Assessment Year"] = df["Assessment Year"].astype(int)
 
-# --- Session State for Login ---
+# --- Session State ---
 if "login" not in st.session_state:
     st.session_state.login = False
     st.session_state.user = None
@@ -30,9 +30,9 @@ tab1, tab2 = st.tabs(["👤 Individual View", "👥 Group View"])
 # ===============================
 with tab1:
     if not st.session_state.login:
-        # Public View (Not Logged In)
         st.title("🔐 Individual Student View - Restricted Access")
 
+        # Login UI
         st.subheader("🔑 Login")
         username = st.text_input("Username", key="login_username")
         password = st.text_input("Password", type="password", key="login_password")
@@ -42,9 +42,11 @@ with tab1:
             if username in users and users[username]["password"] == password:
                 st.session_state.login = True
                 st.session_state.user = username
+                st.success("Login successful.")
             else:
                 st.error("Incorrect username or password.")
 
+        # Public Notice
         st.markdown("""
         🚫 **Restricted Access: Individual Student Data**
 
@@ -57,15 +59,13 @@ with tab1:
         """)
         st.image("sample_individual_tab.png", caption="Sample of Individual Student View", use_container_width=True)
 
-
     else:
-        # Logged In View
+        # Logged-In View
         role = users[st.session_state.user]["role"]
         st.sidebar.success(f"Logged in as {st.session_state.user} ({role})")
         if st.sidebar.button("Logout"):
             st.session_state.login = False
             st.session_state.user = None
-            st.experimental_rerun()
 
         if role == "student":
             midn = users[st.session_state.user]["midn"]
@@ -90,7 +90,7 @@ with tab1:
             ax1.set_xticks(sorted(student_df["Assessment Year"].unique()))
             st.pyplot(fig1)
 
-            # Radar Chart: Student vs Class Average
+            # Radar Chart
             st.subheader("🕸️ Student vs Class Average Profile (Radar)")
             year = st.selectbox("Select Year", sorted(student_df["Assessment Year"].unique()))
             year_df = student_df[student_df["Assessment Year"] == year]
