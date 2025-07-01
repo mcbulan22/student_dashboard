@@ -36,12 +36,12 @@ with tab1:
         st.subheader("🔑 Login")
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
-        if st.button("Login"):
+        if login_btn:
             if username in users and users[username]["password"] == password:
-                st.session_state.login = True
-                st.session_state.user = username
-                st.success("Login successful!")
+                st.session_state.login_status = True
+                st.session_state.username = username
                 st.experimental_rerun()
+                st.stop()  # Prevent further code execution after rerun
             else:
                 st.error("Incorrect username or password.")
 
