@@ -13,18 +13,12 @@ users = {
     "m7929": {"role": "student", "password": "pass7929", "midn": "M-7929"},
 }
 
-# Load data from Excel or define sample data
-sample_data = pd.DataFrame({
-    "Student Name": ["MALUYO, AARON JOHN", "TALISIC, ABDUL NAJIR", "LALAS, ROMEO JR"],
-    "Exam": ["First Year - Engine - E Mat", "First Year - Deck - D Watch 1", "First Year - Engine - E Mat"],
-    "Score": [100, 95, 100],
-    "Program": ["Engine", "Deck", "Engine"],
-    "Year Level": ["First Year", "First Year", "First Year"],
-    "Assessment Year": [2023, 2023, 2023],
-    "Course Name": ["E Mat", "D Watch 1", "E Mat"],
-    "Sponsor": ["IMMAJ", "IMEC", "OTHERS"],
-    "Midn Number": ["M-7968", "M-8142", "M-7929"]
-})
+# Load data from Excel file
+try:
+    sample_data = pd.read_excel("students.xlsx", sheet_name="Sheet1")
+except Exception as e:
+    st.error("Failed to load student data. Please make sure 'students.xlsx' exists and has a 'Sheet1'.")
+    st.stop()
 
 # App layout
 st.set_page_config(page_title="MAAP Student Dashboard", layout="wide")
@@ -35,11 +29,26 @@ tab1, tab2 = st.tabs(["👤 Individual View", "👥 Group View"])
 # --- INDIVIDUAL TAB ---
 with tab1:
     st.subheader("Individual Student Analysis (Login Required)")
+
+    # Login box first
     with st.container():
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
         login_button = st.button("Login")
 
+    # Show information below login box
+    st.markdown("""
+        **Note:** This tab displays data for specific students only. It requires login credentials to ensure access is limited to authorized individuals.
+
+        If you need to see data of all or groups of students, please contact the CCA first, sign the relevant data privacy documents, and request login credentials (valid for a day or specified period).
+
+        If you're a student and want to view your academic profile, please coordinate with the CCA to get a temporary login credential that expires after a given time.
+
+        **To see what this tab looks like, view the sample below:**
+    """)
+    st.image("sample_individual_tab.png", use_container_width=True)
+
+    # Proceed with login logic
     if username and password:
         user = users.get(username)
         if user and user["password"] == password:
@@ -64,9 +73,10 @@ with tab1:
                 ax1.set_xlabel("Assessment Year")
                 st.pyplot(fig1)
 
-                # Radar Chart: Only if student has data for one year
+                # Radar Chart
                 year = st.selectbox("Select Year for Radar Chart", sorted(student_df["Assessment Year"].unique()))
                 year_data = student_df[student_df["Assessment Year"] == year]
+
                 if not year_data.empty:
                     courses = year_data["Course Name"].tolist()
                     scores = year_data["Score"].tolist()
@@ -89,14 +99,11 @@ with tab1:
                 st.warning("No data found for user.")
         else:
             st.error("Incorrect username or password.")
-    else:
-        st.info("Since this tab will show data of specific student(s), it requires login credentials to ensure access is limited to authorized individuals.\n\nIf you need to see data of all or group of students, please contact the CCA first, sign relevant data privacy documents, and request login credentials (valid for a day or specified period).\n\nIf you're a student and want to view your academic profile, please coordinate with the CCA to get a temporary login credential that expires after a given time.")
-        st.markdown("**To see what this tab looks like, view the sample below:**")
-        st.image("sample_individual_tab.png", use_container_width=True)
 
 # --- GROUP TAB ---
 with tab2:
     st.subheader("Group Performance Analysis")
+
     programs = st.multiselect("Select Program(s)", sorted(sample_data["Program"].unique()), default=sorted(sample_data["Program"].unique()))
     sponsors = st.multiselect("Select Sponsor(s)", sorted(sample_data["Sponsor"].unique()), default=sorted(sample_data["Sponsor"].unique()))
 
