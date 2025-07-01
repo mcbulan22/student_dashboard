@@ -3,6 +3,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import streamlit as st
+from PIL import Image
+
+# Load the logo image
+logo = Image.open("maap_logo.png")
 
 # --- User Credentials ---
 users = {
@@ -23,7 +28,13 @@ if "login" not in st.session_state:
     st.session_state.user = None
 
 # --- Tabs ---
-st.title("CCA Assessment Results & Progress Dashboard")
+# Create two columns: logo and title
+col1, col2 = st.columns([1, 5])
+with col1:
+    st.image(logo, width=100)
+with col2:
+    st.markdown("## 📊 Student Assessment Performance Dashboard")
+    st.markdown("### _Center for Competency Assessment_")
 
 tab1, tab2 = st.tabs(["👤 Individual View", "👥 Group View"])
 
