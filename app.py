@@ -9,9 +9,9 @@ import numpy as np
 users = {
     "admin": {"role": "admin", "password": "admin123"},
     "faculty": {"role": "faculty", "password": "faculty123"},
-    "m7968": {"role": "student", "password": "pass7968", "midn": "M-7968"},
-    "m8142": {"role": "student", "password": "pass8142", "midn": "M-8142"},
-    "m7929": {"role": "student", "password": "pass7929", "midn": "M-7929"},
+    "m-7968": {"role": "student", "password": "pass7968", "midn": "M-7968"},
+    "m-8142": {"role": "student", "password": "pass8142", "midn": "M-8142"},
+    "m-7929": {"role": "student", "password": "pass7929", "midn": "M-7929"},
 }
 
 # --- LOAD DATA ---
@@ -22,7 +22,7 @@ if "login_status" not in st.session_state:
     st.session_state.login_status = False
     st.session_state.username = ""
 
-st.title("📊 MAAP Student Performance Dashboard")
+st.title("📊 MAAP Student Performance Dashboard - Continuous Assessment of Class 2026")
 tab1, tab2 = st.tabs(["👤 Individual View (Login Required)", "👥 Group View"])
 
 # === TAB 1: INDIVIDUAL VIEW ===
