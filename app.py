@@ -144,7 +144,7 @@ with tab2:
     program_filter = st.selectbox("Select Program", sorted(df["Program"].dropna().unique()))
 
     group_df = df[(df["Sponsor"] == sponsor_filter) & (df["Program"] == program_filter)]
-    st.dataframe(group_df.drop(columns=["Student Name"]))
+    st.dataframe(group_df.drop(columns=["Student Name", "Midn Number"]))
 
     if not group_df.empty:
         avg_df = group_df.groupby(["Assessment Year", "Course Name"]).mean(numeric_only=True).reset_index()
