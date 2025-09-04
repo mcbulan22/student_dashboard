@@ -268,37 +268,100 @@ with tab1:
 
 
 # ===============================
-# TAB 2: GROUP VIEW
+# TAB 2: GROUP VIEW (with enable/disable filters)
 # ===============================
 with tab2:
     st.title("📊 Group Performance Comparison")
 
     col_left, col_right = st.columns(2)
 
+    # --- Group A UI ---
     with col_left:
         st.subheader("🔹 Group A")
-        AY_A = st.selectbox("AY (Group A)", sorted(df["AY"].unique()), key="ay_a")
-        prog_A = st.selectbox("Program (Group A)", sorted(df["Program"].unique()), key="prog_a")
-        sec_A = st.selectbox("Section (Group A)", sorted(df["Section"].unique()), key="sec_a")
-        cls_A = st.selectbox("Class (Group A)", sorted(df["Class"].unique()), key="cls_a")
-        exam_A = st.selectbox("Exam Type (Group A)", sorted(df["Exam Type"].unique()), key="exam_a")
-        principal_A = st.selectbox("Principal (Group A)", sorted(df["Principal"].unique()), key="princ_a")
+        enable_all_a = st.checkbox("Enable all filters (Group A)", value=False, key="enable_all_a")
 
+        # AY
+        enable_ay_a = st.checkbox("Enable AY filter (A)", value=enable_all_a, key="enable_ay_a")
+        AY_A = st.selectbox("AY (Group A)", sorted(df["AY"].dropna().unique()), key="ay_a") if enable_ay_a else None
+
+        # Program
+        enable_prog_a = st.checkbox("Enable Program filter (A)", value=enable_all_a, key="enable_prog_a")
+        prog_A = st.selectbox("Program (Group A)", sorted(df["Program"].dropna().unique()), key="prog_a") if enable_prog_a else None
+
+        # Section
+        enable_sec_a = st.checkbox("Enable Section filter (A)", value=enable_all_a, key="enable_sec_a")
+        sec_A = st.selectbox("Section (Group A)", sorted(df["Section"].dropna().unique()), key="sec_a") if enable_sec_a else None
+
+        # Class
+        enable_cls_a = st.checkbox("Enable Class filter (A)", value=enable_all_a, key="enable_cls_a")
+        cls_A = st.selectbox("Class (Group A)", sorted(df["Class"].dropna().unique()), key="cls_a") if enable_cls_a else None
+
+        # Exam Type
+        enable_exam_a = st.checkbox("Enable Exam Type filter (A)", value=enable_all_a, key="enable_exam_a")
+        exam_A = st.selectbox("Exam Type (Group A)", sorted(df["Exam Type"].dropna().unique()), key="exam_a") if enable_exam_a else None
+
+        # Principal
+        enable_princ_a = st.checkbox("Enable Principal filter (A)", value=enable_all_a, key="enable_princ_a")
+        principal_A = st.selectbox("Principal (Group A)", sorted(df["Principal"].dropna().unique()), key="princ_a") if enable_princ_a else None
+
+    # --- Group B UI ---
     with col_right:
         st.subheader("🔸 Group B")
-        AY_B = st.selectbox("AY (Group B)", sorted(df["AY"].unique()), key="ay_b")
-        prog_B = st.selectbox("Program (Group B)", sorted(df["Program"].unique()), key="prog_b")
-        sec_B = st.selectbox("Section (Group B)", sorted(df["Section"].unique()), key="sec_b")
-        cls_B = st.selectbox("Class (Group B)", sorted(df["Class"].unique()), key="cls_b")
-        exam_B = st.selectbox("Exam Type (Group B)", sorted(df["Exam Type"].unique()), key="exam_b")
-        principal_B = st.selectbox("Principal (Group B)", sorted(df["Principal"].unique()), key="princ_b")
+        enable_all_b = st.checkbox("Enable all filters (Group B)", value=False, key="enable_all_b")
 
-    # Filter data
-    groupA = df[(df["AY"] == AY_A) & (df["Program"] == prog_A) & (df["Section"] == sec_A) &
-                (df["Class"] == cls_A) & (df["Exam Type"] == exam_A) & (df["Principal"] == principal_A)]
-    groupB = df[(df["AY"] == AY_B) & (df["Program"] == prog_B) & (df["Section"] == sec_B) &
-                (df["Class"] == cls_B) & (df["Exam Type"] == exam_B) & (df["Principal"] == principal_B)]
+        enable_ay_b = st.checkbox("Enable AY filter (B)", value=enable_all_b, key="enable_ay_b")
+        AY_B = st.selectbox("AY (Group B)", sorted(df["AY"].dropna().unique()), key="ay_b") if enable_ay_b else None
 
+        enable_prog_b = st.checkbox("Enable Program filter (B)", value=enable_all_b, key="enable_prog_b")
+        prog_B = st.selectbox("Program (Group B)", sorted(df["Program"].dropna().unique()), key="prog_b") if enable_prog_b else None
+
+        enable_sec_b = st.checkbox("Enable Section filter (B)", value=enable_all_b, key="enable_sec_b")
+        sec_B = st.selectbox("Section (Group B)", sorted(df["Section"].dropna().unique()), key="sec_b") if enable_sec_b else None
+
+        enable_cls_b = st.checkbox("Enable Class filter (B)", value=enable_all_b, key="enable_cls_b")
+        cls_B = st.selectbox("Class (Group B)", sorted(df["Class"].dropna().unique()), key="cls_b") if enable_cls_b else None
+
+        enable_exam_b = st.checkbox("Enable Exam Type filter (B)", value=enable_all_b, key="enable_exam_b")
+        exam_B = st.selectbox("Exam Type (Group B)", sorted(df["Exam Type"].dropna().unique()), key="exam_b") if enable_exam_b else None
+
+        enable_princ_b = st.checkbox("Enable Principal filter (B)", value=enable_all_b, key="enable_princ_b")
+        principal_B = st.selectbox("Principal (Group B)", sorted(df["Principal"].dropna().unique()), key="princ_b") if enable_princ_b else None
+
+    # --- Apply filters only if their enable-checkbox is True ---
+    def apply_filters(source_df, AY, prog, sec, cls, exam, principal):
+        g = source_df.copy()
+        if AY is not None:
+            g = g[g["AY"] == AY]
+        if prog is not None:
+            g = g[g["Program"] == prog]
+        if sec is not None:
+            g = g[g["Section"] == sec]
+        if cls is not None:
+            g = g[g["Class"] == cls]
+        if exam is not None:
+            g = g[g["Exam Type"] == exam]
+        if principal is not None:
+            g = g[g["Principal"] == principal]
+        return g
+
+    groupA = apply_filters(df, AY_A, prog_A, sec_A, cls_A, exam_A, principal_A)
+    groupB = apply_filters(df, AY_B, prog_B, sec_B, cls_B, exam_B, principal_B)
+
+    # Show summary of active filters for clarity
+    with st.expander("Active filters (Group A)"):
+        st.write({
+            "AY": AY_A, "Program": prog_A, "Section": sec_A,
+            "Class": cls_A, "Exam Type": exam_A, "Principal": principal_A
+        })
+        st.write(f"Records found: {len(groupA)}")
+    with st.expander("Active filters (Group B)"):
+        st.write({
+            "AY": AY_B, "Program": prog_B, "Section": sec_B,
+            "Class": cls_B, "Exam Type": exam_B, "Principal": principal_B
+        })
+        st.write(f"Records found: {len(groupB)}")
+
+    # Compare (only aggregated, hide PII)
     if not groupA.empty and not groupB.empty:
         avgA = groupA.groupby("Course")["Percentage Score"].mean().reset_index().rename(columns={"Percentage Score": "Group A"})
         avgB = groupB.groupby("Course")["Percentage Score"].mean().reset_index().rename(columns={"Percentage Score": "Group B"})
@@ -311,4 +374,4 @@ with tab2:
         ax.set_title("Group Comparison")
         st.pyplot(fig)
     else:
-        st.warning("One or both groups have no data.")
+        st.warning("One or both groups have no data (check enabled filters).")
