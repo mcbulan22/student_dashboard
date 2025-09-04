@@ -484,63 +484,62 @@ with tab3:
             return g
 
         df_analysis = apply_analysis_filters(df)
-
         st.markdown(f"Records considered: **{len(df_analysis)}**")
-
-        # --- Utility: compute AY numeric for trend calculation
-        def ay_to_year(ay_str):
-            # try to parse "2024-2025" -> 2024
-            try:
-                return int(str(ay_str).split("-")[0])
-            except:
+        
+        if len(df_analysis) == 0:
+            st.warning("⚠️ No records found for the selected filters. Please adjust filters.")
+        else:
+            # --- Utility: compute AY numeric for trend calculation
+            def ay_to_year(ay_str):
                 try:
-                    return int(str(ay_str)[:4])
+                    return int(str(ay_str).split("-")[0])
                 except:
-                    return None
-
-        # --- Student-level metrics
-        # compute average per student for the filtered dataset
-        student_avg = (
-            df_analysis.groupby(["Midshipman Number", "Full Name", "Section", "Class", "Program"])["Percentage Score"]
-            .mean()
-            .reset_index()
-            .rename(columns={"Percentage Score": "Student_Avg"})
-        )
-
-        # compute section average for same filters (per section)
-        section_avg = (
-            df_analysis.groupby(["Section"])["Percentage Score"]
-            .mean()
-            .reset_index()
-            .rename(columns={"Percentage Score": "Section_Avg"})
-        )
-
-        # merge section avg into student table
-        student_flags = student_avg.merge(section_avg, on="Section", how="left")
-
-        # compute delta
-        student_flags["Delta_vs_Section"] = student_flags["Student_Avg"] - student_flags["Section_Avg"]
-
-        # compute trend per student (slope of AY vs mean score)
-        slopes = []
-        for midn, group in df_analysis.groupby("Midshipman Number"):
-            # aggregate avg percentage per AY
-            g = group.groupby("AY")["Percentage Score"].mean().reset_index()
-            g["AY_num"] = g["AY"].apply(ay_to_year)
-            g = g.dropna(subset=["AY_num", "Percentage Score"])
-            if len(g) < 2:
-                slopes.append({"Midshipman Number": midn, "slope": 0.0, "points": len(g)})
-                continue
-            # linear fit
-            try:
-                coeffs = np.polyfit(g["AY_num"], g["Percentage Score"], 1)
-                slope = float(coeffs[0])
-            except:
-                slope = 0.0
-            slopes.append({"Midshipman Number": midn, "slope": slope, "points": len(g)})
-        slopes_df = pd.DataFrame(slopes)
-
-        student_flags = student_flags.merge(slopes_df, on="Midshipman Number", how="left")
+                    try:
+                        return int(str(ay_str)[:4])
+                    except:
+                        return None
+        
+            # --- Student-level metrics
+            student_avg = (
+                df_analysis.groupby(["Midshipman Number", "Full Name", "Section", "Class", "Program"])["Percentage Score"]
+                .mean()
+                .reset_index()
+                .rename(columns={"Percentage Score": "Student_Avg"})
+            )
+        
+            section_avg = (
+                df_analysis.groupby(["Section"])["Percentage Score"]
+                .mean()
+                .reset_index()
+                .rename(columns={"Percentage Score": "Section_Avg"})
+            )
+        
+            student_flags = student_avg.merge(section_avg, on="Section", how="left")
+        
+            student_flags["Delta_vs_Section"] = student_flags["Student_Avg"] - student_flags["Section_Avg"]
+        
+            # --- Trend slopes
+            slopes = []
+            for midn, group in df_analysis.groupby("Midshipman Number"):
+                g = group.groupby("AY")["Percentage Score"].mean().reset_index()
+                g["AY_num"] = g["AY"].apply(ay_to_year)
+                g = g.dropna(subset=["AY_num", "Percentage Score"])
+                if len(g) < 2:
+                    slopes.append({"Midshipman Number": midn, "slope": 0.0, "points": len(g)})
+                    continue
+                try:
+                    coeffs = np.polyfit(g["AY_num"], g["Percentage Score"], 1)
+                    slope = float(coeffs[0])
+                except:
+                    slope = 0.0
+                slopes.append({"Midshipman Number": midn, "slope": slope, "points": len(g)})
+            slopes_df = pd.DataFrame(slopes)
+        
+            if not slopes_df.empty:
+                student_flags = student_flags.merge(slopes_df, on="Midshipman Number", how="left")
+            else:
+                student_flags["slope"] = 0.0
+                student_flags["points"] = 0
 
         # Decide flags based on rules
         def flag_reasons(row):
