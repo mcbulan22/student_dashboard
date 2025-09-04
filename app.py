@@ -28,14 +28,6 @@ with col2:
 tab1, tab2, tab3 = st.tabs(["👤 Individual View", "👥 Group View", "🛠️ Interventions"])
 
 # ===============================
-# Define valid credentials
-# ===============================
-VALID_USERS = {
-    "admin": "password",
-    "cca": "password",
-}
-
-# ===============================
 # TAB 1: INDIVIDUAL VIEW
 # ===============================
 with tab1:
@@ -385,26 +377,50 @@ with tab2:
         st.warning("One or both groups have no data (check enabled filters).")
 
 # ===============================
-# TAB 3: INTERVENTIONS (Protected)
+# TAB 3: INTERVENTIONS / REMEDIATION (PROTECTED)
 # ===============================
+import datetime
+
 with tab3:
     st.title("🛠️ Interventions — Protected Area")
 
-    # --- check login status in session_state
+    # --- Credentials (fallback + optional Sheet2)
+    # Hardcoded fallback credentials (change or remove as you wish)
+    VALID_TAB3_USERS = {
+        "admin": "password",
+        "marlon": "password"
+    }
+
+    # Build credentials dict: prefer df_users (sheet2) if available, else use fallback
+    creds = VALID_TAB3_USERS.copy()
+    try:
+        # `df_users` is expected to be loaded earlier from Sheet2
+        if "df_users" in globals() and isinstance(df_users, pd.DataFrame):
+            if "username" in df_users.columns and "password" in df_users.columns:
+                for _, r in df_users.iterrows():
+                    if pd.notna(r["username"]):
+                        creds[str(r["username"]).strip()] = str(r["password"]) if pd.notna(r["password"]) else ""
+    except Exception:
+        # if anything goes wrong reading df_users, ignore and fall back to VALID_TAB3_USERS
+        pass
+
+    # --- Tab3 auth state
     if "tab3_authenticated" not in st.session_state:
         st.session_state["tab3_authenticated"] = False
     if "tab3_user" not in st.session_state:
         st.session_state["tab3_user"] = None
 
     if not st.session_state["tab3_authenticated"]:
-        st.warning("This area is restricted. Please login.")
-        username = st.text_input("Username", key="tab3_user_input")
-        password = st.text_input("Password", type="password", key="tab3_pass_input")
+        st.warning("This area is restricted. Please login to access interventions.")
+        username_input = st.text_input("Username", key="tab3_user_input")
+        password_input = st.text_input("Password", type="password", key="tab3_pass_input")
 
         if st.button("Login", key="tab3_loginbtn"):
-            if username in VALID_USERS and VALID_USERS[username] == password:
+            user_key = str(username_input).strip()
+            pw = str(password_input)
+            if user_key in creds and creds[user_key] == pw:
                 st.session_state["tab3_authenticated"] = True
-                st.session_state["tab3_user"] = username
+                st.session_state["tab3_user"] = user_key
                 st.success("✅ Login successful. You may now access interventions.")
                 st.rerun()
             else:
@@ -416,9 +432,8 @@ with tab3:
             st.session_state["tab3_user"] = None
             st.rerun()
 
-
         # -------------------------------
-        # Full Tab 3 interventions logic
+        # Original Tab 3 interventions logic (unchanged, but protected)
         # -------------------------------
         st.title("🛠️ Interventions — Identify & Plan")
 
@@ -474,6 +489,7 @@ with tab3:
 
         # --- Utility: compute AY numeric for trend calculation
         def ay_to_year(ay_str):
+            # try to parse "2024-2025" -> 2024
             try:
                 return int(str(ay_str).split("-")[0])
             except:
@@ -483,6 +499,7 @@ with tab3:
                     return None
 
         # --- Student-level metrics
+        # compute average per student for the filtered dataset
         student_avg = (
             df_analysis.groupby(["Midshipman Number", "Full Name", "Section", "Class", "Program"])["Percentage Score"]
             .mean()
@@ -490,6 +507,7 @@ with tab3:
             .rename(columns={"Percentage Score": "Student_Avg"})
         )
 
+        # compute section average for same filters (per section)
         section_avg = (
             df_analysis.groupby(["Section"])["Percentage Score"]
             .mean()
@@ -497,18 +515,23 @@ with tab3:
             .rename(columns={"Percentage Score": "Section_Avg"})
         )
 
+        # merge section avg into student table
         student_flags = student_avg.merge(section_avg, on="Section", how="left")
+
+        # compute delta
         student_flags["Delta_vs_Section"] = student_flags["Student_Avg"] - student_flags["Section_Avg"]
 
-        # compute trend per student
+        # compute trend per student (slope of AY vs mean score)
         slopes = []
         for midn, group in df_analysis.groupby("Midshipman Number"):
+            # aggregate avg percentage per AY
             g = group.groupby("AY")["Percentage Score"].mean().reset_index()
             g["AY_num"] = g["AY"].apply(ay_to_year)
             g = g.dropna(subset=["AY_num", "Percentage Score"])
             if len(g) < 2:
                 slopes.append({"Midshipman Number": midn, "slope": 0.0, "points": len(g)})
                 continue
+            # linear fit
             try:
                 coeffs = np.polyfit(g["AY_num"], g["Percentage Score"], 1)
                 slope = float(coeffs[0])
@@ -519,7 +542,7 @@ with tab3:
 
         student_flags = student_flags.merge(slopes_df, on="Midshipman Number", how="left")
 
-        # flagging logic
+        # Decide flags based on rules
         def flag_reasons(row):
             reasons = []
             if row["Student_Avg"] < absolute_thresh:
@@ -531,6 +554,7 @@ with tab3:
             return "; ".join(reasons)
         student_flags["Reasons"] = student_flags.apply(flag_reasons, axis=1)
 
+        # Filter only flagged students
         flagged_students = student_flags[student_flags["Reasons"] != ""].copy()
         flagged_students = flagged_students.sort_values(["Student_Avg", "Delta_vs_Section"])
 
@@ -542,10 +566,12 @@ with tab3:
             .rename(columns={"mean": "Section_Avg", "count": "N"})
         )
 
+        # optional: compute program-level avg to compare sections
         program_avg = df_analysis.groupby("Program")["Percentage Score"].mean().reset_index().rename(columns={"Percentage Score": "Program_Avg"})
         sec_metrics = sec_metrics.merge(program_avg, on="Program", how="left")
         sec_metrics["Delta_vs_Program"] = sec_metrics["Section_Avg"] - sec_metrics["Program_Avg"]
 
+        # flag sections (below absolute or below program by delta)
         sec_metrics["Section_Reasons"] = sec_metrics.apply(
             lambda r: "; ".join(
                 [txt for txt in (
@@ -558,31 +584,140 @@ with tab3:
 
         # ---- UI: show flagged students
         st.subheader("3) Flagged students")
+        st.markdown("Students flagged by the chosen rules. Review reasons and assign interventions.")
         st.write(f"Total flagged students: **{len(flagged_students)}**")
+
         if len(flagged_students) > 0:
             st.dataframe(flagged_students[[
                 "Full Name", "Midshipman Number", "Section", "Class", "Program",
                 "Student_Avg", "Section_Avg", "Delta_vs_Section", "slope", "points", "Reasons"
             ]].sort_values("Student_Avg"))
+
+            # quick bar chart of lowest performing students
+            st.subheader("Lowest performing flagged students")
+            low_df = flagged_students.sort_values("Student_Avg").head(10)
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.barh(low_df["Full Name"] + " (" + low_df["Midshipman Number"] + ")", low_df["Student_Avg"])
+            ax.set_xlim(0, 100)
+            ax.set_xlabel("Average % Score")
+            ax.set_title("Lowest flagged students")
+            st.pyplot(fig)
         else:
             st.info("No students flagged with current filters/rules.")
 
-        # ---- Flagged sections
+        # ---- UI: flagged sections
         st.subheader("4) Flagged sections")
         st.write(f"Total flagged sections: **{len(flagged_sections)}**")
         if len(flagged_sections) > 0:
             st.dataframe(flagged_sections[["Section", "Program", "Class", "N", "Section_Avg", "Program_Avg", "Delta_vs_Program", "Section_Reasons"]])
+            fig2, ax2 = plt.subplots(figsize=(10, 4))
+            tmp = flagged_sections.sort_values("Section_Avg").head(10)
+            ax2.barh(tmp["Section"] + " - " + tmp["Program"], tmp["Section_Avg"])
+            ax2.set_xlim(0, 100)
+            ax2.set_xlabel("Section Avg % Score")
+            ax2.set_title("Lowest flagged sections")
+            st.pyplot(fig2)
         else:
             st.info("No sections flagged with current filters/rules.")
 
-        # ---- Intervention suggestions
-        st.subheader("5) Suggested interventions")
+        # ---- Intervention suggestions (automated heuristics)
+        st.subheader("5) Suggested interventions (automated)")
         def suggest_interventions(reason_text, student_avg, delta, slope):
+            # produce prioritized suggestions (list)
             recs = []
+            # if broad low performance
             if "Absolute" in reason_text and student_avg < absolute_thresh:
-                recs += ["Assign remedial modules", "Weekly skills lab", "Peer tutoring", "Extra quizzes"]
+                recs += [
+                    "Assign remedial modular kit (self-paced modules)",
+                    "Schedule weekly skills lab / supervised practice",
+                    "Assign peer tutor (same section)",
+                    "Assign formative quizzes and mastery checks"
+                ]
+            # if below section by a lot
             if "below section" in reason_text:
-                recs += ["One-on-one tutoring", "Diagnostic assessment", "Instructor pacing review"]
+                recs += [
+                    "One-on-one tutoring on weak courses",
+                    "Diagnostic assessment to identify gaps",
+                    "Instructor review of lesson pacing for those courses"
+                ]
+            # trend
             if "Declining" in reason_text or slope < trend_slope_thresh:
-                recs += ["Mentor check-in", "Counseling", "Progress checkpoints"]
-            return list(dict.fromkeys(recs))  # dedupe
+                recs += [
+                    "Mentor check-in and study plan",
+                    "Counseling / academic advising",
+                    "Short-term progress checkpoint (2 weeks)"
+                ]
+            # exam type specific hints
+            if str(exam_type_filter).lower().find("final") >= 0:
+                recs += ["Exam skills workshop: time management, question analysis, mock exam under exam conditions"]
+            if str(exam_type_filter).lower().find("outcome") >= 0 or str(exam_type_filter).lower().find("coa") >= 0:
+                recs += ["Competency-focused remediation: supervised practice in skills/simulator"]
+            # unique & dedupe
+            unique = []
+            for r in recs:
+                if r not in unique:
+                    unique.append(r)
+            return unique
+
+        # show suggestions for each flagged student (collapsible)
+        if len(flagged_students) > 0:
+            for _, r in flagged_students.head(50).iterrows():
+                with st.expander(f"{r['Full Name']} ({r['Midshipman Number']}) — Reasons: {r['Reasons']}"):
+                    st.write({
+                        "Student Avg": round(r["Student_Avg"], 2),
+                        "Section Avg": round(r["Section_Avg"], 2) if pd.notna(r["Section_Avg"]) else None,
+                        "Delta": round(r["Delta_vs_Section"], 2),
+                        "Trend slope": round(r.get("slope", 0), 3),
+                    })
+                    recs = suggest_interventions(r["Reasons"], r["Student_Avg"], r["Delta_vs_Section"], r.get("slope", 0))
+                    st.markdown("**Recommended interventions:**")
+                    for rec in recs:
+                        st.write("- " + rec)
+
+                    # allow planner to create an intervention entry
+                    st.markdown("**Create intervention**")
+                    default_start = datetime.date.today()
+                    start_dt = st.date_input("Start date", value=default_start, key=f"start_{r['Midshipman Number']}")
+                    due_dt = st.date_input("Due date", value=default_start + datetime.timedelta(days=14), key=f"due_{r['Midshipman Number']}")
+                    assigned_to = st.text_input("Assigned to (tutor/mentor)", key=f"assign_{r['Midshipman Number']}")
+                    intervention_choice = st.selectbox("Pick recommended action", ["Custom"] + recs, key=f"pickrec_{r['Midshipman Number']}")
+                    custom_note = st.text_area("Notes / steps", key=f"note_{r['Midshipman Number']}")
+                    if st.button("Save intervention", key=f"save_{r['Midshipman Number']}"):
+                        # store in session_state interventions list
+                        if "interventions" not in st.session_state:
+                            st.session_state["interventions"] = []
+                        action = intervention_choice if intervention_choice != "Custom" else custom_note
+                        st.session_state["interventions"].append({
+                            "Full Name": r["Full Name"],
+                            "Midshipman Number": r["Midshipman Number"],
+                            "Section": r["Section"],
+                            "Reason": r["Reasons"],
+                            "Action": action,
+                            "Assigned To": assigned_to,
+                            "Start": str(start_dt),
+                            "Due": str(due_dt),
+                            "Status": "Planned",
+                            "Notes": custom_note
+                        })
+                        st.success("Intervention saved (session).")
+
+        # ---- Show / manage interventions saved in session
+        st.subheader("6) Saved interventions (local session)")
+        if "interventions" not in st.session_state:
+            st.write("No interventions saved yet in this session.")
+        else:
+            interventions_df = pd.DataFrame(st.session_state["interventions"])
+            st.dataframe(interventions_df)
+
+            # allow status update
+            idx = st.number_input("Select row index to change status (0-based)", min_value=0, max_value=len(interventions_df)-1, value=0)
+            new_status = st.selectbox("New status", ["Planned", "In progress", "Completed"], key="new_status_key")
+            if st.button("Update status"):
+                st.session_state["interventions"][idx]["Status"] = new_status
+                st.success("Status updated.")
+                st.rerun()
+
+            # allow export
+            csv = interventions_df.to_csv(index=False)
+            st.download_button("Download interventions CSV", data=csv, file_name="interventions.csv", mime="text/csv")
+
