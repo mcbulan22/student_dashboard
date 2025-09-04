@@ -59,92 +59,165 @@ with tab1:
     else:
         # Logged in
         midn = st.session_state.midn
-        student_df = df[df["Midshipman Number"] == midn]
+        student_df = df[df["Midshipman Number"] == midn].copy()
     
         if student_df.empty:
             st.warning("No records found for this student.")
         else:
+            # Basic student info
             student_name = student_df["Full Name"].iloc[0]
-            section = student_df["Section"].iloc[0]
+            section = student_df["Section"].iloc[0] if "Section" in student_df.columns else ""
+            AY_student = student_df["AY"].iloc[0] if "AY" in student_df.columns else None
+            program_student = student_df["Program"].iloc[0] if "Program" in student_df.columns else None
+            class_student = student_df["Class"].iloc[0] if "Class" in student_df.columns else None
+    
             st.subheader(f"📈 Academic Profile: {student_name}")
             st.dataframe(student_df)
     
-        def radar_chart(student_df, section_df, title):
-            if student_df.empty or section_df.empty:
-                st.warning(f"No data available for {title}")
-                return
-        
-            # Normalize course names
-            student_df["Course"] = student_df["Course"].str.strip().str.upper()
-            section_df["Course"] = section_df["Course"].str.strip().str.upper()
-        
-            # Merge
-            merged = pd.merge(
-                student_df,
-                section_df,
-                on="Course",
-                how="inner",
-                suffixes=("_student", "_section")
-            )
-        
-            if merged.empty:
-                st.warning(f"No matching courses found for {title}")
-                return
-        
-            categories = merged["Course"].tolist()
-            values_student = merged["Percentage Score_student"].tolist()
-            values_section = merged["Percentage Score_section"].tolist()
-        
-            # Close the loop by appending first element only ONCE
-            categories += [categories[0]]
-            values_student += [values_student[0]]
-            values_section += [values_section[0]]
-        
-            # Angles: must match categories length
-            angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
-        
-            # Radar plot
-            fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
-            ax.plot(angles, values_student, label="Student", linewidth=2)
-            ax.fill(angles, values_student, alpha=0.25)
-        
-            ax.plot(angles, values_section, linestyle="dashed", label="Section Avg", linewidth=2)
-            ax.fill(angles, values_section, alpha=0.25)
-        
-            ax.set_thetagrids(np.degrees(angles), categories)
-            ax.set_title(title, size=14, weight="bold", pad=20)
-            ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
-        
-            st.pyplot(fig)
-
-            # === Prepare datasets ===
-            # Final Term Exam
-            fte_student = (
-                student_df[student_df["Exam Type"] == "Final Term Exam"]
-                .groupby("Course", as_index=False)["Percentage Score"]
-                .mean()
-            )
-            fte_section = (
-                df[(df["Exam Type"] == "Final Term Exam") & (df["Section"] == section)]
-                .groupby("Course", as_index=False)["Percentage Score"]
-                .mean()
-            )
-            if not fte_student.empty and not fte_section.empty:
-                radar_chart(fte_student, fte_section, "Final Term Exam Performance")
+            # Helper: prepare mean scores per normalized course
+            def prepare_scores(df_in):
+                d = df_in.copy()
+                if "Course" not in d.columns or "Percentage Score" not in d.columns:
+                    return pd.DataFrame(columns=["Course_key", "Percentage Score"])
+                d["Course_key"] = d["Course"].astype(str).str.strip().str.upper()
+                d["Percentage Score"] = pd.to_numeric(d["Percentage Score"], errors="coerce")
+                d = d.dropna(subset=["Course_key", "Percentage Score"])
+                out = d.groupby("Course_key", as_index=False)["Percentage Score"].mean()
+                return out
     
-            # Course Outcome Assessment
-            coa_student = (
-                student_df[student_df["Exam Type"] == "Course Outcome Assessment"]
-                .groupby("Course", as_index=False)["Percentage Score"]
-                .mean()
-            )
-            coa_section = (
-                df[(df["Exam Type"] == "Course Outcome Assessment") & (df["Section"] == section)]
-                .groupby("Course", as_index=False)["Percentage Score"]
-                .mean()
-            )
-            if not coa_student.empty and not coa_section.empty:
-                radar_chart(coa_student, coa_section, "Course Outcome Assessment Performance")
+            # Helper: radar plotting given a merged df with Course_key, Percentage Score_student, Percentage Score_comp
+            def plot_merged_radar(merged_df, title, level_label):
+                if merged_df.empty:
+                    st.warning(f"No overlapping courses to plot for {title} when comparing to {level_label}.")
+                    return
+    
+                # categories and values
+                categories = merged_df["Course_key"].tolist()
+                vals_student = merged_df["Percentage Score_student"].tolist()
+                vals_comp = merged_df["Percentage Score_comp"].tolist()
+    
+                # close loop
+                categories += [categories[0]]
+                vals_student += [vals_student[0]]
+                vals_comp += [vals_comp[0]]
+    
+                angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
+    
+                fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+                ax.plot(angles, vals_student, label="Student", linewidth=2)
+                ax.fill(angles, vals_student, alpha=0.25)
+                ax.plot(angles, vals_comp, linestyle="dashed", label=f"{level_label} Avg", linewidth=2)
+                ax.fill(angles, vals_comp, alpha=0.15)
+    
+                # show readable labels (you can change format here)
+                ax.set_thetagrids(np.degrees(angles), categories)
+                ax.set_ylim(0, 100)
+                ax.set_title(title + f" — Compared to {level_label}", size=14, weight="bold", pad=12)
+                ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
+    
+                st.pyplot(fig)
+    
+            # Helper: student-only radar (no comparison)
+            def plot_student_only(student_scores_df, title):
+                if student_scores_df.empty:
+                    st.warning(f"No student data to plot for {title}.")
+                    return
+    
+                categories = student_scores_df["Course_key"].tolist()
+                vals_student = student_scores_df["Percentage Score"].tolist()
+    
+                categories += [categories[0]]
+                vals_student += [vals_student[0]]
+    
+                angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
+    
+                fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+                ax.plot(angles, vals_student, label="Student", linewidth=2)
+                ax.fill(angles, vals_student, alpha=0.25)
+    
+                ax.set_thetagrids(np.degrees(angles), categories)
+                ax.set_ylim(0, 100)
+                ax.set_title(title + " — Student only", size=14, weight="bold", pad=12)
+                ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
+    
+                st.pyplot(fig)
+    
+            # Core logic to get student & comparison frames for an exam type (with fallbacks)
+            def get_student_and_comparison(exam_type_label):
+                # Accept flexible exam type matching (case-insensitive, substring)
+                mask_student = student_df["Exam Type"].astype(str).str.contains(exam_type_label, case=False, na=False)
+                student_scores = prepare_scores(student_df[mask_student])
+    
+                # candidate comparison levels (ordered)
+                comparison_levels = []
+    
+                # Section level
+                if section:
+                    df_section = df[df["Section"] == section]
+                    df_section_mask = df_section[df_section["Exam Type"].astype(str).str.contains(exam_type_label, case=False, na=False)]
+                    comparison_levels.append(("Section", df_section_mask))
+    
+                # Class level
+                if class_student:
+                    df_class = df[(df["Class"] == class_student) & (df["AY"] == AY_student)]
+                    df_class_mask = df_class[df_class["Exam Type"].astype(str).str.contains(exam_type_label, case=False, na=False)]
+                    comparison_levels.append(("Class", df_class_mask))
+    
+                # Program + AY level
+                if program_student and AY_student:
+                    df_prog = df[(df["Program"] == program_student) & (df["AY"] == AY_student)]
+                    df_prog_mask = df_prog[df_prog["Exam Type"].astype(str).str.contains(exam_type_label, case=False, na=False)]
+                    comparison_levels.append(("Program+AY", df_prog_mask))
+    
+                # AY + Program fallback already covered; last resort: all students for the exam type
+                df_all_mask = df[df["Exam Type"].astype(str).str.contains(exam_type_label, case=False, na=False)]
+                comparison_levels.append(("All Students", df_all_mask))
+    
+                # Evaluate each level to find best comparison that has overlap with student's courses
+                for level_name, lvl_df in comparison_levels:
+                    comp_scores = prepare_scores(lvl_df)
+                    # check if there is at least one common course_key
+                    if not student_scores.empty and not comp_scores.empty:
+                        common = set(student_scores["Course_key"]).intersection(set(comp_scores["Course_key"]))
+                        if len(common) > 0:
+                            # reduce to only overlapping courses, then prepare merged frame
+                            stud_sub = student_scores[student_scores["Course_key"].isin(common)].copy()
+                            comp_sub = comp_scores[comp_scores["Course_key"].isin(common)].copy()
+                            merged = pd.merge(stud_sub, comp_sub, on="Course_key", how="inner", suffixes=("_student", "_comp"))
+                            return student_scores, comp_scores, merged, level_name
+    
+                # No overlapping comparison found; return what we have (student_scores may be empty) and None for merged/level
+                return student_scores, pd.DataFrame(columns=["Course_key", "Percentage Score"]), pd.DataFrame(), None
+    
+            # --- Final Term Exam Radar ---
+            fte_student_scores, fte_comp_scores, fte_merged, fte_level = get_student_and_comparison("final")
+            if not fte_merged.empty:
+                st.info(f"Final Term Exam — comparison level used: {fte_level}")
+                st.write("Merged (Final Term Exam) sample:", fte_merged.head())
+                plot_merged_radar(fte_merged, "Final Term Exam Performance", fte_level)
+            else:
+                # if no merged overlap but student has FTE data, show student-only radar with an info message
+                if not fte_student_scores.empty:
+                    st.info("No matching comparison group found for Final Term Exam — showing student-only radar.")
+                    st.write("Student (Final Term Exam) sample:", fte_student_scores.head())
+                    plot_student_only(fte_student_scores, "Final Term Exam Performance")
+                else:
+                    st.warning("No Final Term Exam records found for this student.")
+    
+            # --- Course Outcome Assessment Radar ---
+            coa_student_scores, coa_comp_scores, coa_merged, coa_level = get_student_and_comparison("course outcome|coa")
+            if not coa_merged.empty:
+                st.info(f"Course Outcome Assessment — comparison level used: {coa_level}")
+                st.write("Merged (COA) sample:", coa_merged.head())
+                plot_merged_radar(coa_merged, "Course Outcome Assessment Performance", coa_level)
+            else:
+                if not coa_student_scores.empty:
+                    st.info("No matching comparison group found for COA — showing student-only radar.")
+                    st.write("Student (COA) sample:", coa_student_scores.head())
+                    plot_student_only(coa_student_scores, "Course Outcome Assessment Performance")
+                else:
+                    st.warning("No Course Outcome Assessment records found for this student.")
+
 
 
 # ===============================
