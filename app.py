@@ -69,53 +69,54 @@ with tab1:
             st.subheader(f"📈 Academic Profile: {student_name}")
             st.dataframe(student_df)
     
-            def radar_chart(student_df, section_df, title):
-                if student_df.empty or section_df.empty:
-                    st.warning(f"No data available for {title}")
-                    return
-    
-                # Normalize course names
-                student_df["Course"] = student_df["Course"].str.strip().str.upper()
-                section_df["Course"] = section_df["Course"].str.strip().str.upper()
-    
-                # Merge
-                merged = pd.merge(
-                    student_df,
-                    section_df,
-                    on="Course",
-                    how="inner",
-                    suffixes=("_student", "_section")
-                )
-    
-                if merged.empty:
-                    st.warning(f"No matching courses found for {title}")
-                    return
-    
-                categories = merged["Course"].tolist()
-                values_student = merged["Percentage Score_student"].tolist()
-                values_section = merged["Percentage Score_section"].tolist()
-    
-                # Close loop
-                categories += [categories[0]]
-                values_student += [values_student[0]]
-                values_section += [values_section[0]]
-    
-                angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
-                angles += angles[:1]
-    
-                fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
-                ax.plot(angles, values_student, label="Student", linewidth=2)
-                ax.fill(angles, values_student, alpha=0.25)
-    
-                ax.plot(angles, values_section, linestyle="dashed", label="Section Avg", linewidth=2)
-                ax.fill(angles, values_section, alpha=0.25)
-    
-                ax.set_thetagrids(np.degrees(angles[:-1]), categories)
-                ax.set_title(title, size=14, weight="bold", pad=20)
-                ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
-    
-                st.pyplot(fig)
-    
+        def radar_chart(student_df, section_df, title):
+            if student_df.empty or section_df.empty:
+                st.warning(f"No data available for {title}")
+                return
+        
+            # Normalize course names
+            student_df["Course"] = student_df["Course"].str.strip().str.upper()
+            section_df["Course"] = section_df["Course"].str.strip().str.upper()
+        
+            # Merge
+            merged = pd.merge(
+                student_df,
+                section_df,
+                on="Course",
+                how="inner",
+                suffixes=("_student", "_section")
+            )
+        
+            if merged.empty:
+                st.warning(f"No matching courses found for {title}")
+                return
+        
+            categories = merged["Course"].tolist()
+            values_student = merged["Percentage Score_student"].tolist()
+            values_section = merged["Percentage Score_section"].tolist()
+        
+            # Close the loop by appending first element only ONCE
+            categories += [categories[0]]
+            values_student += [values_student[0]]
+            values_section += [values_section[0]]
+        
+            # Angles: must match categories length
+            angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
+        
+            # Radar plot
+            fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+            ax.plot(angles, values_student, label="Student", linewidth=2)
+            ax.fill(angles, values_student, alpha=0.25)
+        
+            ax.plot(angles, values_section, linestyle="dashed", label="Section Avg", linewidth=2)
+            ax.fill(angles, values_section, alpha=0.25)
+        
+            ax.set_thetagrids(np.degrees(angles), categories)
+            ax.set_title(title, size=14, weight="bold", pad=20)
+            ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
+        
+            st.pyplot(fig)
+
             # === Prepare datasets ===
             # Final Term Exam
             fte_student = (
