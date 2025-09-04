@@ -406,7 +406,7 @@ with tab3:
                 st.session_state["tab3_authenticated"] = True
                 st.session_state["tab3_user"] = username
                 st.success("✅ Login successful. You may now access interventions.")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("❌ Invalid credentials. Try again.")
     else:
@@ -414,7 +414,8 @@ with tab3:
         if st.button("Logout", key="tab3_logout"):
             st.session_state["tab3_authenticated"] = False
             st.session_state["tab3_user"] = None
-            st.experimental_rerun()
+            st.rerun()
+
 
         # -------------------------------
         # Full Tab 3 interventions logic
