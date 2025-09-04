@@ -70,22 +70,50 @@ with tab1:
             st.subheader(f"📈 Academic Profile: {student_name}")
             st.dataframe(student_df)
 
-            def radar_chart(data_student, data_section, title):
-                categories = data_student.index.tolist()
-                N = len(categories)
-                values_student = data_student.tolist() + data_student.tolist()[:1]
-                values_section = data_section.tolist() + data_section.tolist()[:1]
-                angles = [n / float(N) * 2 * np.pi for n in range(N)] + [0]
+        def radar_chart(student_df, section_df, title):
+            if student_df.empty or section_df.empty:
+                st.warning(f"No data available for {title}")
+                return
+        
+            # Ensure both have the same courses
+            merged = pd.merge(
+                student_df[["Course", "Percentage Score"]],
+                section_df[["Course", "Percentage Score"]],
+                on="Course",
+                how="inner",
+                suffixes=("_student", "_section")
+            )
+        
+            if merged.empty:
+                st.warning(f"No matching courses found for {title}")
+                return
+        
+            categories = merged["Course"].tolist()
+            values_student = merged["Percentage Score_student"].tolist()
+            values_section = merged["Percentage Score_section"].tolist()
+        
+            # Close the loop
+            categories += [categories[0]]
+            values_student += [values_student[0]]
+            values_section += [values_section[0]]
+        
+            # Radar setup
+            angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
+            angles += angles[:1]
+        
+            fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+            ax.plot(angles, values_student, label="Student", linewidth=2)
+            ax.fill(angles, values_student, alpha=0.25)
+        
+            ax.plot(angles, values_section, linestyle="dashed", label="Section Avg", linewidth=2)
+            ax.fill(angles, values_section, alpha=0.25)
+        
+            ax.set_thetagrids(np.degrees(angles[:-1]), categories)
+            ax.set_title(title, size=14, weight="bold", pad=20)
+            ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
+        
+            st.pyplot(fig)
 
-                fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
-                ax.plot(angles, values_student, label="Student", linewidth=2)
-                ax.fill(angles, values_student, alpha=0.25)
-                ax.plot(angles, values_section, linestyle="dashed", label="Section Avg", linewidth=2)
-                ax.set_thetagrids(np.degrees(angles[:-1]), categories)
-                ax.set_ylim(0, 100)
-                ax.set_title(title, y=1.1)
-                ax.legend(loc='upper right', bbox_to_anchor=(1.1, 1.1))
-                st.pyplot(fig)
 
             # Radar for Final Term Exam
             fte_student = student_df[student_df["Exam Type"] == "Final Term Exam"].groupby("Course")["Percentage Score"].mean()
