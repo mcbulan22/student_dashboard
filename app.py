@@ -85,61 +85,108 @@ with tab1:
                 out = d.groupby("Course_key", as_index=False)["Percentage Score"].mean()
                 return out
     
-            # Helper: radar plotting given a merged df with Course_key, Percentage Score_student, Percentage Score_comp
             def plot_merged_radar(merged_df, title, level_label):
+                """
+                merged_df expected columns:
+                  - Course_key
+                  - Percentage Score_student
+                  - Percentage Score_comp
+                """
                 if merged_df.empty:
                     st.warning(f"No overlapping courses to plot for {title} when comparing to {level_label}.")
                     return
-    
-                # categories and values
-                categories = merged_df["Course_key"].tolist()
+            
+                # Ensure stable ordering
+                merged_df = merged_df.sort_values("Course_key").reset_index(drop=True)
+            
+                courses = merged_df["Course_key"].tolist()
                 vals_student = merged_df["Percentage Score_student"].tolist()
                 vals_comp = merged_df["Percentage Score_comp"].tolist()
-    
-                # close loop
-                categories += [categories[0]]
-                vals_student += [vals_student[0]]
-                vals_comp += [vals_comp[0]]
-    
-                angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
-    
+                N = len(courses)
+            
+                # Fallback for too few categories: use bar chart
+                if N < 3:
+                    fig, ax = plt.subplots(figsize=(6, 4))
+                    x = np.arange(N)
+                    width = 0.35
+                    ax.bar(x - width/2, vals_student, width, label="Student")
+                    ax.bar(x + width/2, vals_comp, width, label=f"{level_label} Avg")
+                    ax.set_xticks(x)
+                    ax.set_xticklabels(courses, rotation=30, ha="right")
+                    ax.set_ylim(0, 100)
+                    ax.set_ylabel("Percentage Score")
+                    ax.set_title(f"{title} — {level_label} (Bar fallback for <3 courses)")
+                    ax.legend()
+                    st.pyplot(fig)
+                    return
+            
+                # Radar plotting for N >= 3
+                # angles for N categories, then extend by repeating first angle to close loop
+                angles = np.linspace(0, 2 * np.pi, N, endpoint=False).tolist()
+                angles += angles[:1]  # now length N+1
+            
+                vals_student_loop = vals_student + vals_student[:1]
+                vals_comp_loop = vals_comp + vals_comp[:1]
+            
                 fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
-                ax.plot(angles, vals_student, label="Student", linewidth=2)
-                ax.fill(angles, vals_student, alpha=0.25)
-                ax.plot(angles, vals_comp, linestyle="dashed", label=f"{level_label} Avg", linewidth=2)
-                ax.fill(angles, vals_comp, alpha=0.15)
-    
-                # show readable labels (you can change format here)
-                ax.set_thetagrids(np.degrees(angles), categories)
+                ax.plot(angles, vals_student_loop, label="Student", linewidth=2)
+                ax.fill(angles, vals_student_loop, alpha=0.25)
+                ax.plot(angles, vals_comp_loop, linestyle="dashed", label=f"{level_label} Avg", linewidth=2)
+                ax.fill(angles, vals_comp_loop, alpha=0.15)
+            
+                # Use angles[:-1] and original courses for labels (prevents duplicated label showing)
+                ax.set_thetagrids(np.degrees(angles[:-1]), courses)
                 ax.set_ylim(0, 100)
-                ax.set_title(title + f" — Compared to {level_label}", size=14, weight="bold", pad=12)
+                ax.set_title(f"{title} — Compared to {level_label}", size=14, weight="bold", pad=12)
                 ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
-    
+            
                 st.pyplot(fig)
     
             # Helper: student-only radar (no comparison)
             def plot_student_only(student_scores_df, title):
+                """
+                student_scores_df expected columns:
+                  - Course_key
+                  - Percentage Score
+                """
                 if student_scores_df.empty:
                     st.warning(f"No student data to plot for {title}.")
                     return
-    
-                categories = student_scores_df["Course_key"].tolist()
+            
+                student_scores_df = student_scores_df.sort_values("Course_key").reset_index(drop=True)
+                courses = student_scores_df["Course_key"].tolist()
                 vals_student = student_scores_df["Percentage Score"].tolist()
-    
-                categories += [categories[0]]
-                vals_student += [vals_student[0]]
-    
-                angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
-    
+                N = len(courses)
+            
+                # Fallback to bar if fewer than 3 courses
+                if N < 3:
+                    fig, ax = plt.subplots(figsize=(6, 4))
+                    x = np.arange(N)
+                    ax.bar(x, vals_student, width=0.6, label="Student")
+                    ax.set_xticks(x)
+                    ax.set_xticklabels(courses, rotation=30, ha="right")
+                    ax.set_ylim(0, 100)
+                    ax.set_ylabel("Percentage Score")
+                    ax.set_title(title + " — Student only (Bar fallback for <3 courses)")
+                    ax.legend()
+                    st.pyplot(fig)
+                    return
+            
+                # Radar for N >= 3
+                angles = np.linspace(0, 2 * np.pi, N, endpoint=False).tolist()
+                angles += angles[:1]  # close loop
+            
+                vals_student_loop = vals_student + vals_student[:1]
+            
                 fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
-                ax.plot(angles, vals_student, label="Student", linewidth=2)
-                ax.fill(angles, vals_student, alpha=0.25)
-    
-                ax.set_thetagrids(np.degrees(angles), categories)
+                ax.plot(angles, vals_student_loop, label="Student", linewidth=2)
+                ax.fill(angles, vals_student_loop, alpha=0.25)
+            
+                ax.set_thetagrids(np.degrees(angles[:-1]), courses)
                 ax.set_ylim(0, 100)
                 ax.set_title(title + " — Student only", size=14, weight="bold", pad=12)
                 ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1.1))
-    
+            
                 st.pyplot(fig)
     
             # Core logic to get student & comparison frames for an exam type (with fallbacks)
