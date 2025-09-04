@@ -43,11 +43,19 @@ with tab1:
             if not match.empty:
                 st.session_state.login = True
                 st.session_state.user = username
-                st.session_state.midn = match["Midshipman Number"].iloc[0]
+        
+                # Find student's MIDN from Sheet1 by matching email or username
+                student_match = df[(df["Email address"] == username) | (df["Midshipman Number"] == username)]
+                if not student_match.empty:
+                    st.session_state.midn = student_match["Midshipman Number"].iloc[0]
+                else:
+                    st.session_state.midn = None
+        
                 st.success("Login successful.")
                 st.rerun()
             else:
                 st.error("Invalid username or password.")
+
 
     else:
         # Logged in
