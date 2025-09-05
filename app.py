@@ -583,13 +583,31 @@ with tab3:
 
         # ---- UI: show flagged students
         st.subheader("3) Flagged students")
-        st.markdown("Students flagged by the chosen rules. Review reasons and assign interventions.")
+        st.markdown("Students flagged by the chosen rules. Review reasons, see weak courses, and assign interventions.")
         st.write(f"Total flagged students: **{len(flagged_students)}**")
 
         if len(flagged_students) > 0:
+            # Compute weak courses per flagged student
+            weak_courses_dict = {}
+            for midn in flagged_students["Midshipman Number"]:
+                stud_records = df_analysis[df_analysis["Midshipman Number"] == midn]
+                # student average per course
+                stud_course_avg = stud_records.groupby("Course")["Percentage Score"].mean().reset_index()
+                # section average per course
+                sec = flagged_students.loc[flagged_students["Midshipman Number"] == midn, "Section"].values[0]
+                sec_records = df_analysis[df_analysis["Section"] == sec]
+                sec_course_avg = sec_records.groupby("Course")["Percentage Score"].mean().reset_index()
+                merged = pd.merge(stud_course_avg, sec_course_avg, on="Course", how="inner", suffixes=("_student", "_section"))
+                # flag weak courses
+                merged["Gap"] = merged["Percentage Score_student"] - merged["Percentage Score_section"]
+                weak_list = merged[merged["Gap"] < -relative_delta]["Course"].tolist()
+                weak_courses_dict[midn] = weak_list if weak_list else []
+
+            flagged_students["Weak Courses"] = flagged_students["Midshipman Number"].map(weak_courses_dict)
+
             st.dataframe(flagged_students[[
                 "Full Name", "Midshipman Number", "Section", "Class", "Program",
-                "Student_Avg", "Section_Avg", "Delta_vs_Section", "slope", "points", "Reasons"
+                "Student_Avg", "Section_Avg", "Delta_vs_Section", "slope", "points", "Reasons", "Weak Courses"
             ]].sort_values("Student_Avg"))
 
             # quick bar chart of lowest performing students
@@ -601,8 +619,7 @@ with tab3:
             ax.set_xlabel("Average % Score")
             ax.set_title("Lowest flagged students")
             st.pyplot(fig)
-        else:
-            st.info("No students flagged with current filters/rules.")
+
 
         # ---- UI: flagged sections
         st.subheader("4) Flagged sections")
