@@ -657,10 +657,14 @@ with tab3:
 
         # ---- Intervention suggestions (automated heuristics)
         st.subheader("5) Suggested interventions (automated)")
+        
+        # ensure defaults exist (avoid NameError on reruns)
+        if "trend_slope_thresh" not in st.session_state:
+            st.session_state["trend_slope_thresh"] = -0.5
+        
+        # helper function
         def suggest_interventions(reason_text, student_avg, delta, slope, trend_slope_thresh):
-            # produce prioritized suggestions (list)
             recs = []
-            # if broad low performance
             if "Absolute" in reason_text and student_avg < absolute_thresh:
                 recs += [
                     "Assign remedial modular kit (self-paced modules)",
@@ -668,32 +672,30 @@ with tab3:
                     "Assign peer tutor (same section)",
                     "Assign formative quizzes and mastery checks"
                 ]
-            # if below section by a lot
             if "below section" in reason_text:
                 recs += [
                     "One-on-one tutoring on weak courses",
                     "Diagnostic assessment to identify gaps",
                     "Instructor review of lesson pacing for those courses"
                 ]
-            # trend
             if "Declining" in reason_text or slope < trend_slope_thresh:
                 recs += [
                     "Mentor check-in and study plan",
                     "Counseling / academic advising",
                     "Short-term progress checkpoint (2 weeks)"
                 ]
-            # exam type specific hints
             if str(exam_type_filter).lower().find("final") >= 0:
                 recs += ["Exam skills workshop: time management, question analysis, mock exam under exam conditions"]
             if str(exam_type_filter).lower().find("outcome") >= 0 or str(exam_type_filter).lower().find("coa") >= 0:
                 recs += ["Competency-focused remediation: supervised practice in skills/simulator"]
-            # unique & dedupe
+        
+            # remove duplicates while preserving order
             unique = []
             for r in recs:
                 if r not in unique:
                     unique.append(r)
             return unique
-
+        
         # show suggestions for each flagged student (collapsible)
         if len(flagged_students) > 0:
             for _, r in flagged_students.head(50).iterrows():
@@ -705,16 +707,16 @@ with tab3:
                         "Trend slope": round(r.get("slope", 0), 3),
                     })
                     recs = suggest_interventions(
-                        r["Reasons"], 
-                        r["Student_Avg"], 
-                        r["Delta_vs_Section"], 
+                        r["Reasons"],
+                        r["Student_Avg"],
+                        r["Delta_vs_Section"],
                         r.get("slope", 0),
-                        trend_slope_thresh
+                        st.session_state["trend_slope_thresh"]
                     )
                     st.markdown("**Recommended interventions:**")
                     for rec in recs:
                         st.write("- " + rec)
-
+        
                     # allow planner to create an intervention entry
                     st.markdown("**Create intervention**")
                     default_start = datetime.date.today()
@@ -724,7 +726,6 @@ with tab3:
                     intervention_choice = st.selectbox("Pick recommended action", ["Custom"] + recs, key=f"pickrec_{r['Midshipman Number']}")
                     custom_note = st.text_area("Notes / steps", key=f"note_{r['Midshipman Number']}")
                     if st.button("Save intervention", key=f"save_{r['Midshipman Number']}"):
-                        # store in session_state interventions list
                         if "interventions" not in st.session_state:
                             st.session_state["interventions"] = []
                         action = intervention_choice if intervention_choice != "Custom" else custom_note
@@ -741,15 +742,15 @@ with tab3:
                             "Notes": custom_note
                         })
                         st.success("Intervention saved (session).")
-
+        
         # ---- Show / manage interventions saved in session
         st.subheader("6) Saved interventions (local session)")
-        if "interventions" not in st.session_state:
+        if "interventions" not in st.session_state or len(st.session_state["interventions"]) == 0:
             st.write("No interventions saved yet in this session.")
         else:
             interventions_df = pd.DataFrame(st.session_state["interventions"])
             st.dataframe(interventions_df)
-
+        
             # allow status update
             idx = st.number_input("Select row index to change status (0-based)", min_value=0, max_value=len(interventions_df)-1, value=0)
             new_status = st.selectbox("New status", ["Planned", "In progress", "Completed"], key="new_status_key")
@@ -757,7 +758,8 @@ with tab3:
                 st.session_state["interventions"][idx]["Status"] = new_status
                 st.success("Status updated.")
                 st.rerun()
-
+        
             # allow export
             csv = interventions_df.to_csv(index=False)
             st.download_button("Download interventions CSV", data=csv, file_name="interventions.csv", mime="text/csv")
+
