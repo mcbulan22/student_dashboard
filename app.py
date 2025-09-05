@@ -385,26 +385,21 @@ with tab3:
     st.title("🛠️ Interventions — Protected Area")
 
     # --- Credentials (fallback + optional Sheet2)
-    # Hardcoded fallback credentials (change or remove as you wish)
     VALID_TAB3_USERS = {
         "admin": "password",
         "marlon": "password"
     }
 
-    # Build credentials dict: prefer df_users (sheet2) if available, else use fallback
     creds = VALID_TAB3_USERS.copy()
     try:
-        # `df_users` is expected to be loaded earlier from Sheet2
         if "df_users" in globals() and isinstance(df_users, pd.DataFrame):
             if "username" in df_users.columns and "password" in df_users.columns:
                 for _, r in df_users.iterrows():
                     if pd.notna(r["username"]):
                         creds[str(r["username"]).strip()] = str(r["password"]) if pd.notna(r["password"]) else ""
     except Exception:
-        # if anything goes wrong reading df_users, ignore and fall back to VALID_TAB3_USERS
         pass
 
-    # --- Tab3 auth state
     if "tab3_authenticated" not in st.session_state:
         st.session_state["tab3_authenticated"] = False
     if "tab3_user" not in st.session_state:
@@ -433,16 +428,14 @@ with tab3:
             st.rerun()
 
         # -------------------------------
-        # Original Tab 3 interventions logic (unchanged, but protected)
+        # Tab 3 interventions logic
         # -------------------------------
         st.title("🛠️ Interventions — Identify & Plan")
 
-        st.markdown(
-            "Use this tab to find underperforming students/sections, pick suggested interventions, and track progress. "
-            "Adjust thresholds and filters then review recommended actions."
-        )
+        st.markdown("Use this tab to find **at-risk or performing** students/sections, "
+                    "pick suggested interventions, and track progress.")
 
-        # --- Filters for the analysis (global)
+        # --- Filters
         st.subheader("1) Filters for analysis")
         colf1, colf2, colf3 = st.columns(3)
         with colf1:
@@ -455,18 +448,28 @@ with tab3:
             class_filter = st.selectbox("Class (analysis)", ["All"] + sorted(df["Class"].dropna().unique().tolist()))
             section_filter = st.selectbox("Section (analysis)", ["All"] + sorted(df["Section"].dropna().unique().tolist()))
 
+        # --- Mode: At-risk or Performing
+        st.subheader("2) Select analysis mode")
+        analysis_mode = st.radio(
+            "Which group do you want to analyze?",
+            ["At-risk students/sections", "Performing students/sections"],
+            horizontal=True
+        )
+
         # --- Thresholds / rules
-        st.subheader("2) Flagging rules")
+        st.subheader("3) Flagging rules")
         colt1, colt2, colt3 = st.columns(3)
         with colt1:
-            absolute_thresh = st.slider("Absolute threshold (flag if < value)", 40, 80, 60)
+            absolute_thresh = st.slider("Absolute threshold", 40, 95, 60)
+            high_absolute_thresh = st.slider("High performance threshold", 70, 100, 85)
         with colt2:
-            relative_delta = st.slider("Relative delta (flag if student is this many pts below section avg)", 0, 30, 10)
+            relative_delta = st.slider("Relative delta (points vs section/program)", 0, 30, 10)
         with colt3:
-            trend_detect = st.checkbox("Detect declining trend (flag if negative slope)", value=True)
-            trend_slope_thresh = st.number_input("Trend slope threshold (negative growth per year)", value=-0.5, format="%.2f")
+            trend_detect = st.checkbox("Detect trend", value=True)
+            neg_trend_thresh = st.number_input("Negative slope threshold", value=-0.5, format="%.2f")
+            pos_trend_thresh = st.number_input("Positive slope threshold", value=0.5, format="%.2f")
 
-        # --- Helper: apply analysis filters
+        # --- Helper: apply filters
         def apply_analysis_filters(df_in):
             g = df_in.copy()
             if exam_type_filter != "All":
@@ -485,77 +488,83 @@ with tab3:
 
         df_analysis = apply_analysis_filters(df)
         st.markdown(f"Records considered: **{len(df_analysis)}**")
-        
+
         if len(df_analysis) == 0:
             st.warning("⚠️ No records found for the selected filters. Please adjust filters.")
-        else:
-            # --- Utility: compute AY numeric for trend calculation
-            def ay_to_year(ay_str):
+            st.stop()
+
+        # --- Compute metrics (student + section)
+        def ay_to_year(ay_str):
+            try:
+                return int(str(ay_str).split("-")[0])
+            except:
                 try:
-                    return int(str(ay_str).split("-")[0])
+                    return int(str(ay_str)[:4])
                 except:
-                    try:
-                        return int(str(ay_str)[:4])
-                    except:
-                        return None
-        
-            # --- Student-level metrics
-            student_avg = (
-                df_analysis.groupby(["Midshipman Number", "Full Name", "Section", "Class", "Program"])["Percentage Score"]
-                .mean()
-                .reset_index()
-                .rename(columns={"Percentage Score": "Student_Avg"})
-            )
-        
-            section_avg = (
-                df_analysis.groupby(["Section"])["Percentage Score"]
-                .mean()
-                .reset_index()
-                .rename(columns={"Percentage Score": "Section_Avg"})
-            )
-        
-            student_flags = student_avg.merge(section_avg, on="Section", how="left")
-            student_flags["Delta_vs_Section"] = student_flags["Student_Avg"] - student_flags["Section_Avg"]
-        
-            # --- Trend slopes
-            slopes = []
-            for midn, group in df_analysis.groupby("Midshipman Number"):
-                g = group.groupby("AY")["Percentage Score"].mean().reset_index()
-                g["AY_num"] = g["AY"].apply(ay_to_year)
-                g = g.dropna(subset=["AY_num", "Percentage Score"])
-                if len(g) < 2:
-                    slopes.append({"Midshipman Number": midn, "slope": 0.0, "points": len(g)})
-                    continue
-                try:
-                    coeffs = np.polyfit(g["AY_num"], g["Percentage Score"], 1)
-                    slope = float(coeffs[0])
-                except:
-                    slope = 0.0
-                slopes.append({"Midshipman Number": midn, "slope": slope, "points": len(g)})
-            slopes_df = pd.DataFrame(slopes)
-        
-            if not slopes_df.empty:
-                student_flags = student_flags.merge(slopes_df, on="Midshipman Number", how="left")
-            else:
-                student_flags["slope"] = 0.0
-                student_flags["points"] = 0
-        
-            # --- Decide flags based on rules
-            def flag_reasons(row):
-                reasons = []
+                    return None
+
+        student_avg = (
+            df_analysis.groupby(["Midshipman Number", "Full Name", "Section", "Class", "Program"])["Percentage Score"]
+            .mean()
+            .reset_index()
+            .rename(columns={"Percentage Score": "Student_Avg"})
+        )
+
+        section_avg = (
+            df_analysis.groupby(["Section"])["Percentage Score"]
+            .mean()
+            .reset_index()
+            .rename(columns={"Percentage Score": "Section_Avg"})
+        )
+
+        student_flags = student_avg.merge(section_avg, on="Section", how="left")
+        student_flags["Delta_vs_Section"] = student_flags["Student_Avg"] - student_flags["Section_Avg"]
+
+        # Trend slopes
+        slopes = []
+        for midn, group in df_analysis.groupby("Midshipman Number"):
+            g = group.groupby("AY")["Percentage Score"].mean().reset_index()
+            g["AY_num"] = g["AY"].apply(ay_to_year)
+            g = g.dropna(subset=["AY_num", "Percentage Score"])
+            if len(g) < 2:
+                slopes.append({"Midshipman Number": midn, "slope": 0.0, "points": len(g)})
+                continue
+            try:
+                coeffs = np.polyfit(g["AY_num"], g["Percentage Score"], 1)
+                slope = float(coeffs[0])
+            except:
+                slope = 0.0
+            slopes.append({"Midshipman Number": midn, "slope": slope, "points": len(g)})
+        slopes_df = pd.DataFrame(slopes)
+        student_flags = student_flags.merge(slopes_df, on="Midshipman Number", how="left")
+
+        # --- Decide flags (different for at-risk vs performing)
+        def flag_reasons(row):
+            reasons = []
+            if analysis_mode == "At-risk students/sections":
                 if row["Student_Avg"] < absolute_thresh:
                     reasons.append(f"Absolute<{absolute_thresh}")
                 if row["Delta_vs_Section"] < -relative_delta:
                     reasons.append(f"{abs(row['Delta_vs_Section']):.1f}pt below section")
-                if trend_detect and row.get("slope", 0) <= trend_slope_thresh and row.get("points", 0) >= 2:
+                if trend_detect and row.get("slope", 0) <= neg_trend_thresh and row.get("points", 0) >= 2:
                     reasons.append(f"Declining trend (slope={row['slope']:.2f})")
-                return "; ".join(reasons)
-        
-            student_flags["Reasons"] = student_flags.apply(flag_reasons, axis=1)
+            else:  # Performing
+                if row["Student_Avg"] > high_absolute_thresh:
+                    reasons.append(f"Absolute>{high_absolute_thresh}")
+                if row["Delta_vs_Section"] > relative_delta:
+                    reasons.append(f"+{row['Delta_vs_Section']:.1f}pt above section")
+                if trend_detect and row.get("slope", 0) >= pos_trend_thresh and row.get("points", 0) >= 2:
+                    reasons.append(f"Improving trend (slope={row['slope']:.2f})")
+            return "; ".join(reasons)
 
-        # Filter only flagged students
+        student_flags["Reasons"] = student_flags.apply(flag_reasons, axis=1)
+
+        # Filter students
         flagged_students = student_flags[student_flags["Reasons"] != ""].copy()
-        flagged_students = flagged_students.sort_values(["Student_Avg", "Delta_vs_Section"])
+
+        if flagged_students.empty:
+            st.info(f"No {analysis_mode.lower()} found with current rules/filters.")
+            st.stop()
 
         # --- Section-level metrics
         sec_metrics = (
@@ -565,21 +574,31 @@ with tab3:
             .rename(columns={"mean": "Section_Avg", "count": "N"})
         )
 
-        # optional: compute program-level avg to compare sections
         program_avg = df_analysis.groupby("Program")["Percentage Score"].mean().reset_index().rename(columns={"Percentage Score": "Program_Avg"})
         sec_metrics = sec_metrics.merge(program_avg, on="Program", how="left")
         sec_metrics["Delta_vs_Program"] = sec_metrics["Section_Avg"] - sec_metrics["Program_Avg"]
 
-        # flag sections (below absolute or below program by delta)
-        sec_metrics["Section_Reasons"] = sec_metrics.apply(
-            lambda r: "; ".join(
-                [txt for txt in (
-                    (f"SectionAvg<{absolute_thresh}" if r["Section_Avg"] < absolute_thresh else None),
-                    (f"{abs(r['Delta_vs_Program']):.1f}pt below program" if r["Delta_vs_Program"] < -relative_delta else None),
-                ) if txt]
-            ), axis=1
-        )
+        if analysis_mode == "At-risk students/sections":
+            sec_metrics["Section_Reasons"] = sec_metrics.apply(
+                lambda r: "; ".join(
+                    [txt for txt in (
+                        (f"SectionAvg<{absolute_thresh}" if r["Section_Avg"] < absolute_thresh else None),
+                        (f"{abs(r['Delta_vs_Program']):.1f}pt below program" if r["Delta_vs_Program"] < -relative_delta else None),
+                    ) if txt]
+                ), axis=1
+            )
+        else:
+            sec_metrics["Section_Reasons"] = sec_metrics.apply(
+                lambda r: "; ".join(
+                    [txt for txt in (
+                        (f"SectionAvg>{high_absolute_thresh}" if r["Section_Avg"] > high_absolute_thresh else None),
+                        (f"+{r['Delta_vs_Program']:.1f}pt above program" if r["Delta_vs_Program"] > relative_delta else None),
+                    ) if txt]
+                ), axis=1
+            )
+
         flagged_sections = sec_metrics[sec_metrics["Section_Reasons"] != ""]
+
 
         # ---- UI: show flagged students
         st.subheader("3) Flagged students")
