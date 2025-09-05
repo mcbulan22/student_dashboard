@@ -599,50 +599,94 @@ with tab3:
 
         flagged_sections = sec_metrics[sec_metrics["Section_Reasons"] != ""]
 
+
+        # ---- UI: show flagged students
+        st.subheader("3) Flagged students")
+        st.markdown("Students flagged by the chosen rules. Review reasons, see weak courses, and assign interventions.")
+        st.write(f"Total flagged students: **{len(flagged_students)}**")
+
+        if len(flagged_students) > 0:
+            # Compute weak courses per flagged student
+            weak_courses_dict = {}
+            for midn in flagged_students["Midshipman Number"]:
+                stud_records = df_analysis[df_analysis["Midshipman Number"] == midn]
+                # student average per course
+                stud_course_avg = stud_records.groupby("Course")["Percentage Score"].mean().reset_index()
+                # section average per course
+                sec = flagged_students.loc[flagged_students["Midshipman Number"] == midn, "Section"].values[0]
+                sec_records = df_analysis[df_analysis["Section"] == sec]
+                sec_course_avg = sec_records.groupby("Course")["Percentage Score"].mean().reset_index()
+                merged = pd.merge(stud_course_avg, sec_course_avg, on="Course", how="inner", suffixes=("_student", "_section"))
+                # flag weak courses
+                merged["Gap"] = merged["Percentage Score_student"] - merged["Percentage Score_section"]
+                weak_list = merged[merged["Gap"] < -relative_delta]["Course"].tolist()
+                weak_courses_dict[midn] = weak_list if weak_list else []
+
+            flagged_students["Weak Courses"] = flagged_students["Midshipman Number"].map(weak_courses_dict)
+
+            st.dataframe(flagged_students[[
+                "Full Name", "Midshipman Number", "Section", "Class", "Program",
+                "Student_Avg", "Section_Avg", "Delta_vs_Section", "slope", "points", "Reasons", "Weak Courses"
+            ]].sort_values("Student_Avg"))
+
+            # quick bar chart of lowest performing students
+            st.subheader("Lowest performing flagged students")
+            low_df = flagged_students.sort_values("Student_Avg").head(10)
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.barh(low_df["Full Name"] + " (" + low_df["Midshipman Number"] + ")", low_df["Student_Avg"])
+            ax.set_xlim(0, 100)
+            ax.set_xlabel("Average % Score")
+            ax.set_title("Lowest flagged students")
+            st.pyplot(fig)
+
+
+        # ---- UI: flagged sections
+        st.subheader("4) Flagged sections")
+        st.write(f"Total flagged sections: **{len(flagged_sections)}**")
+        if len(flagged_sections) > 0:
+            st.dataframe(flagged_sections[["Section", "Program", "Class", "N", "Section_Avg", "Program_Avg", "Delta_vs_Program", "Section_Reasons"]])
+            fig2, ax2 = plt.subplots(figsize=(10, 4))
+            tmp = flagged_sections.sort_values("Section_Avg").head(10)
+            ax2.barh(tmp["Section"] + " - " + tmp["Program"], tmp["Section_Avg"])
+            ax2.set_xlim(0, 100)
+            ax2.set_xlabel("Section Avg % Score")
+            ax2.set_title("Lowest flagged sections")
+            st.pyplot(fig2)
+        else:
+            st.info("No sections flagged with current filters/rules.")
+
         # ---- Intervention suggestions (automated heuristics)
         st.subheader("5) Suggested interventions (automated)")
-        def suggest_interventions(reason_text, student_avg, delta, slope,
-                                  neg_trend_thresh=-0.5, pos_trend_thresh=0.5):
+        def suggest_interventions(reason_text, student_avg, delta, slope):
+            # produce prioritized suggestions (list)
             recs = []
-            if analysis_mode == "At-risk students/sections":
-                if "Absolute" in reason_text and student_avg < absolute_thresh:
-                    recs += [
-                        "Assign remedial modular kit (self-paced modules)",
-                        "Schedule weekly skills lab / supervised practice",
-                        "Assign peer tutor (same section)",
-                        "Assign formative quizzes and mastery checks"
-                    ]
-                if "below section" in reason_text:
-                    recs += [
-                        "One-on-one tutoring on weak courses",
-                        "Diagnostic assessment to identify gaps",
-                        "Instructor review of lesson pacing for those courses"
-                    ]
-                if "Declining" in reason_text or slope < neg_trend_thresh:
-                    recs += [
-                        "Mentor check-in and study plan",
-                        "Counseling / academic advising",
-                        "Short-term progress checkpoint (2 weeks)"
-                    ]
-            else:  # Performing students
-                if "Absolute" in reason_text and student_avg > high_absolute_thresh:
-                    recs += [
-                        "Assign as peer mentor / tutor for struggling cadets",
-                        "Nominate for advanced modules or enrichment projects",
-                        "Encourage participation in competitions / leadership roles"
-                    ]
-                if "above section" in reason_text or delta > relative_delta:
-                    recs += [
-                        "Involve in best practices sharing (study habits, note-taking, strategies)",
-                        "Assign to collaborative peer-mentoring activities",
-                        "Provide opportunities for research or advanced assignments"
-                    ]
-                if "Improving" in reason_text or slope > pos_trend_thresh:
-                    recs += [
-                        "Recognize with commendation or certificate",
-                        "Encourage sustained performance via advanced challenges",
-                        "Leadership workshop / advanced responsibility training"
-                    ]
+            # if broad low performance
+            if "Absolute" in reason_text and student_avg < absolute_thresh:
+                recs += [
+                    "Assign remedial modular kit (self-paced modules)",
+                    "Schedule weekly skills lab / supervised practice",
+                    "Assign peer tutor (same section)",
+                    "Assign formative quizzes and mastery checks"
+                ]
+            # if below section by a lot
+            if "below section" in reason_text:
+                recs += [
+                    "One-on-one tutoring on weak courses",
+                    "Diagnostic assessment to identify gaps",
+                    "Instructor review of lesson pacing for those courses"
+                ]
+            # trend
+            if "Declining" in reason_text or slope < trend_slope_thresh:
+                recs += [
+                    "Mentor check-in and study plan",
+                    "Counseling / academic advising",
+                    "Short-term progress checkpoint (2 weeks)"
+                ]
+            # exam type specific hints
+            if str(exam_type_filter).lower().find("final") >= 0:
+                recs += ["Exam skills workshop: time management, question analysis, mock exam under exam conditions"]
+            if str(exam_type_filter).lower().find("outcome") >= 0 or str(exam_type_filter).lower().find("coa") >= 0:
+                recs += ["Competency-focused remediation: supervised practice in skills/simulator"]
             # unique & dedupe
             unique = []
             for r in recs:
@@ -650,17 +694,8 @@ with tab3:
                     unique.append(r)
             return unique
 
-        # ---- UI: show flagged students
-        st.subheader("4) Flagged students")
-        st.markdown("Students flagged by the chosen rules. Review reasons, see weak courses, and assign interventions.")
-        st.write(f"Total flagged students: **{len(flagged_students)}**")
-
+        # show suggestions for each flagged student (collapsible)
         if len(flagged_students) > 0:
-            st.dataframe(flagged_students[[
-                "Full Name", "Midshipman Number", "Section", "Class", "Program",
-                "Student_Avg", "Section_Avg", "Delta_vs_Section", "slope", "points", "Reasons"
-            ]].sort_values("Student_Avg"))
-
             for _, r in flagged_students.head(50).iterrows():
                 with st.expander(f"{r['Full Name']} ({r['Midshipman Number']}) — Reasons: {r['Reasons']}"):
                     st.write({
@@ -669,12 +704,12 @@ with tab3:
                         "Delta": round(r["Delta_vs_Section"], 2),
                         "Trend slope": round(r.get("slope", 0), 3),
                     })
-                    recs = suggest_interventions(r["Reasons"], r["Student_Avg"], r["Delta_vs_Section"], r.get("slope", 0),
-                                                 neg_trend_thresh, pos_trend_thresh)
+                    recs = suggest_interventions(r["Reasons"], r["Student_Avg"], r["Delta_vs_Section"], r.get("slope", 0))
                     st.markdown("**Recommended interventions:**")
                     for rec in recs:
                         st.write("- " + rec)
 
+                    # allow planner to create an intervention entry
                     st.markdown("**Create intervention**")
                     default_start = datetime.date.today()
                     start_dt = st.date_input("Start date", value=default_start, key=f"start_{r['Midshipman Number']}")
@@ -683,6 +718,7 @@ with tab3:
                     intervention_choice = st.selectbox("Pick recommended action", ["Custom"] + recs, key=f"pickrec_{r['Midshipman Number']}")
                     custom_note = st.text_area("Notes / steps", key=f"note_{r['Midshipman Number']}")
                     if st.button("Save intervention", key=f"save_{r['Midshipman Number']}"):
+                        # store in session_state interventions list
                         if "interventions" not in st.session_state:
                             st.session_state["interventions"] = []
                         action = intervention_choice if intervention_choice != "Custom" else custom_note
@@ -708,6 +744,7 @@ with tab3:
             interventions_df = pd.DataFrame(st.session_state["interventions"])
             st.dataframe(interventions_df)
 
+            # allow status update
             idx = st.number_input("Select row index to change status (0-based)", min_value=0, max_value=len(interventions_df)-1, value=0)
             new_status = st.selectbox("New status", ["Planned", "In progress", "Completed"], key="new_status_key")
             if st.button("Update status"):
@@ -715,5 +752,6 @@ with tab3:
                 st.success("Status updated.")
                 st.rerun()
 
+            # allow export
             csv = interventions_df.to_csv(index=False)
             st.download_button("Download interventions CSV", data=csv, file_name="interventions.csv", mime="text/csv")
