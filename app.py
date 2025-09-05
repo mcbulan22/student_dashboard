@@ -657,7 +657,7 @@ with tab3:
 
         # ---- Intervention suggestions (automated heuristics)
         st.subheader("5) Suggested interventions (automated)")
-        def suggest_interventions(reason_text, student_avg, delta, slope):
+        def suggest_interventions(reason_text, student_avg, delta, slope, trend_slope_thresh):
             # produce prioritized suggestions (list)
             recs = []
             # if broad low performance
@@ -704,7 +704,13 @@ with tab3:
                         "Delta": round(r["Delta_vs_Section"], 2),
                         "Trend slope": round(r.get("slope", 0), 3),
                     })
-                    recs = suggest_interventions(r["Reasons"], r["Student_Avg"], r["Delta_vs_Section"], r.get("slope", 0))
+                    recs = suggest_interventions(
+                        r["Reasons"], 
+                        r["Student_Avg"], 
+                        r["Delta_vs_Section"], 
+                        r.get("slope", 0),
+                        trend_slope_thresh
+                    )
                     st.markdown("**Recommended interventions:**")
                     for rec in recs:
                         st.write("- " + rec)
