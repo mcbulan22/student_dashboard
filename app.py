@@ -515,7 +515,6 @@ with tab3:
             )
         
             student_flags = student_avg.merge(section_avg, on="Section", how="left")
-        
             student_flags["Delta_vs_Section"] = student_flags["Student_Avg"] - student_flags["Section_Avg"]
         
             # --- Trend slopes
@@ -540,18 +539,19 @@ with tab3:
             else:
                 student_flags["slope"] = 0.0
                 student_flags["points"] = 0
-
-        # Decide flags based on rules
-        def flag_reasons(row):
-            reasons = []
-            if row["Student_Avg"] < absolute_thresh:
-                reasons.append(f"Absolute<{absolute_thresh}")
-            if row["Delta_vs_Section"] < -relative_delta:
-                reasons.append(f"{abs(row['Delta_vs_Section']):.1f}pt below section")
-            if trend_detect and row.get("slope", 0) <= trend_slope_thresh and row.get("points", 0) >= 2:
-                reasons.append(f"Declining trend (slope={row['slope']:.2f})")
-            return "; ".join(reasons)
-        student_flags["Reasons"] = student_flags.apply(flag_reasons, axis=1)
+        
+            # --- Decide flags based on rules
+            def flag_reasons(row):
+                reasons = []
+                if row["Student_Avg"] < absolute_thresh:
+                    reasons.append(f"Absolute<{absolute_thresh}")
+                if row["Delta_vs_Section"] < -relative_delta:
+                    reasons.append(f"{abs(row['Delta_vs_Section']):.1f}pt below section")
+                if trend_detect and row.get("slope", 0) <= trend_slope_thresh and row.get("points", 0) >= 2:
+                    reasons.append(f"Declining trend (slope={row['slope']:.2f})")
+                return "; ".join(reasons)
+        
+            student_flags["Reasons"] = student_flags.apply(flag_reasons, axis=1)
 
         # Filter only flagged students
         flagged_students = student_flags[student_flags["Reasons"] != ""].copy()
